@@ -8,7 +8,6 @@ import {
   getActiveCloudProject,
   getCurrentUser,
   getKnownCloudProjects,
-  getProjectLink,
   openCloudProject,
 } from "../data/cloudProjects";
 
@@ -57,7 +56,8 @@ export const CloudProjectsDialog = ({
         files: excalidrawAPI.getFiles(),
         title: title.trim() || "Untitled project",
       });
-      window.location.href = getProjectLink(project);
+      onClose();
+      await openCloudProject(project);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save project.");
       setBusy(false);
@@ -165,7 +165,10 @@ export const CloudProjectsDialog = ({
                     <div className="cloud-projects-actions">
                       <button
                         disabled={busy}
-                        onClick={() => openCloudProject(project)}
+                        onClick={() => {
+                          onClose();
+                          void openCloudProject(project);
+                        }}
                         type="button"
                       >
                         Open
