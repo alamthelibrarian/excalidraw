@@ -162,6 +162,8 @@ export default defineConfig(({ mode }) => {
         },
 
         workbox: {
+          // Authentication and project APIs must always reach Pages Functions.
+          navigateFallbackDenylist: [/^\/api\//],
           // don't precache fonts, locales and separate chunks
           globIgnores: [
             "fonts.css",
@@ -323,3 +325,4 @@ export default defineConfig(({ mode }) => {
     publicDir: "../public",
   };
 });
+
