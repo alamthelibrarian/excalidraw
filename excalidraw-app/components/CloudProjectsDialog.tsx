@@ -9,6 +9,7 @@ import {
   getCurrentUser,
   getKnownCloudProjects,
   openCloudProject,
+  renameCloudProject,
 } from "../data/cloudProjects";
 
 import type { CloudProjectAccess, CloudUser } from "../data/cloudProjects";
@@ -79,6 +80,30 @@ export const CloudProjectsDialog = ({
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Could not delete project.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renameProject = async (project: CloudProjectAccess) => {
+    const nextTitle = window.prompt("Project name", project.title)?.trim();
+    if (!nextTitle || nextTitle === project.title) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const updated = await renameCloudProject(project, nextTitle);
+      setProjects((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      if (activeProject?.id === updated.id) {
+        setTitle(updated.title);
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not rename project.",
       );
     } finally {
       setBusy(false);
@@ -163,6 +188,13 @@ export const CloudProjectsDialog = ({
                       </small>
                     </div>
                     <div className="cloud-projects-actions">
+                      <button
+                        disabled={busy}
+                        onClick={() => void renameProject(project)}
+                        type="button"
+                      >
+                        Rename
+                      </button>
                       <button
                         disabled={busy}
                         onClick={() => {

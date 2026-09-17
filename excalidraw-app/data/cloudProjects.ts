@@ -32,6 +32,7 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let pending: Snapshot | null = null;
 let saving = false;
 let lastSavedPayload: string | null = null;
+let activeProject: CloudProjectAccess | null = null;
 let status: CloudProjectSaveStatus = "idle";
 
 const listeners = new Set<(status: CloudProjectSaveStatus) => void>();
@@ -68,7 +69,12 @@ export const getProjectLink = (project: Pick<CloudProjectAccess, "id">) =>
 
 export const getActiveCloudProject = (): CloudProjectAccess | null => {
   const id = location.hash.match(/^#project=([^,]+)$/)?.[1];
-  return id ? { id, title: "Excalidraw project", updatedAt: "" } : null;
+  if (!id) {
+    return null;
+  }
+  return activeProject?.id === id
+    ? activeProject
+    : { id, title: "Untitled project", updatedAt: "" };
 };
 
 export const getCurrentUser = async () => {
@@ -103,6 +109,11 @@ export const loadActiveCloudProject = async () => {
     title: loaded.title,
     scene: loaded.scene,
   });
+  activeProject = {
+    id: loaded.id,
+    title: loaded.title,
+    updatedAt: loaded.updatedAt,
+  };
   return loaded;
 };
 
@@ -192,6 +203,23 @@ export const deleteCloudProject = async (project: CloudProjectAccess) => {
   );
 };
 
+export const renameCloudProject = async (
+  project: CloudProjectAccess,
+  title: string,
+) => {
+  const updated = await parse<CloudProjectAccess>(
+    await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+  );
+  if (activeProject?.id === updated.id) {
+    activeProject = updated;
+  }
+  return updated;
+};
+
 export const openCloudProject = async (project: CloudProjectAccess) => {
   await flushCloudProjectSave();
   history.pushState(
@@ -205,5 +233,6 @@ export const openCloudProject = async (project: CloudProjectAccess) => {
 export const detachActiveCloudProject = () => {
   history.replaceState({}, document.title, location.pathname);
   lastSavedPayload = null;
+  activeProject = null;
   emit("idle");
 };
