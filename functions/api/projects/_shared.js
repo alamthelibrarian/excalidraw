@@ -1,78 +1,11 @@
-const MAX_SCENE_BYTES = 1_800_000;
-
-export const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
-
-export const readBody = async (request) => {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > MAX_SCENE_BYTES) {
-    throw new ResponseError(
-      413,
-      "Proyek terlalu besar untuk penyimpanan D1. Kurangi gambar atau lampiran.",
-    );
-  }
-  const body = await request.json();
-  const sceneData = JSON.stringify(body.scene || {});
-  if (new TextEncoder().encode(sceneData).byteLength > MAX_SCENE_BYTES) {
-    throw new ResponseError(
-      413,
-      "Proyek terlalu besar untuk penyimpanan D1. Kurangi gambar atau lampiran.",
-    );
-  }
-  const title = String(body.title || "").trim().slice(0, 120);
-  return { title: title || "Proyek tanpa judul", sceneData };
-};
-
-export const getBearerToken = (request) => {
-  const authorization = request.headers.get("authorization") || "";
-  return authorization.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length)
-    : "";
-};
-
-export const randomToken = () => {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
-};
-
-export const hashToken = async (token) => {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(token),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
-
-export const requireDatabase = (env) => {
-  if (!env.DB) {
-    throw new ResponseError(503, "Binding D1 bernama DB belum dikonfigurasi.");
-  }
-  return env.DB;
-};
-
-export class ResponseError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-export const handleError = (error) => {
-  if (error instanceof ResponseError) {
-    return json({ error: error.message }, error.status);
-  }
-  console.error(error);
-  return json({ error: "Terjadi kesalahan pada server." }, 500);
-};
+const MAX = 1800000;
+export const json=(data,status=200,headers={})=>new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
+const enc=(v)=>btoa(String.fromCharCode(...new Uint8Array(v))).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+const dec=(v)=>Uint8Array.from(atob(v.replaceAll("-","+").replaceAll("_","/")),c=>c.charCodeAt(0));
+const hkey=(s)=>crypto.subtle.importKey("raw",new TextEncoder().encode(s),{name:"HMAC",hash:"SHA-256"},false,["sign","verify"]);
+export const createSession=async(user,secret)=>{const p=enc(new TextEncoder().encode(JSON.stringify({...user,exp:Date.now()+2592e6})));return p+"."+enc(await crypto.subtle.sign("HMAC",await hkey(secret),new TextEncoder().encode(p)));};
+export const getSession=async(request,env)=>{if(!env.SESSION_SECRET)throw new ResponseError(503,"SESSION_SECRET belum dikonfigurasi.");const value=(request.headers.get("cookie")||"").match(/(?:^|; )draw_session=([^;]+)/)?.[1];if(!value)throw new ResponseError(401,"Silakan masuk dengan Google.");const [p,s]=value.split(".");if(!p||!s||!await crypto.subtle.verify("HMAC",await hkey(env.SESSION_SECRET),dec(s),new TextEncoder().encode(p)))throw new ResponseError(401,"Sesi tidak valid.");const session=JSON.parse(new TextDecoder().decode(dec(p)));if(session.exp<Date.now())throw new ResponseError(401,"Sesi telah berakhir.");return session;};
+export const readBody=async(request)=>{if(Number(request.headers.get("content-length")||0)>MAX)throw new ResponseError(413,"Proyek terlalu besar.");const body=await request.json(),sceneData=JSON.stringify(body.scene||{});if(new TextEncoder().encode(sceneData).byteLength>MAX)throw new ResponseError(413,"Proyek terlalu besar.");const title=String(body.title||"").trim().slice(0,120);return{title:title||"Proyek tanpa judul",sceneData};};
+export const requireDatabase=(env)=>{if(!env.DB)throw new ResponseError(503,"Binding D1 DB belum dikonfigurasi.");return env.DB;};
+export class ResponseError extends Error{constructor(status,message){super(message);this.status=status;}}
+export const handleError=(e)=>e instanceof ResponseError?json({error:e.message},e.status):(console.error(e),json({error:"Terjadi kesalahan pada server."},500));
