@@ -1,2 +1,73 @@
-import{createSession,requireDatabase}from"../projects/_shared.js";
-export const onRequestGet=async({request,env})=>{try{if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET||!env.SESSION_SECRET)throw new Error("OAuth config incomplete");const url=new URL(request.url),state=url.searchParams.get("state"),code=url.searchParams.get("code"),expected=(request.headers.get("cookie")||"").match(/(?:^|; )oauth_state=([^;]+)/)?.[1];if(!code||!state||state!==expected)return new Response("Permintaan login tidak valid.",{status:400});const tr=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:url.origin+"/api/auth/callback",grant_type:"authorization_code"})});if(!tr.ok)throw new Error("Token exchange failed");const token=await tr.json(),pr=await fetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{Authorization:`Bearer ${token.access_token}`}});if(!pr.ok)throw new Error("Profile failed");const p=await pr.json(),now=new Date().toISOString();await requireDatabase(env).prepare("INSERT INTO users(id,email,name,picture,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,picture=excluded.picture,updated_at=excluded.updated_at").bind(p.sub,p.email,p.name||p.email,p.picture||"",now,now).run();const session=await createSession({sub:p.sub,email:p.email,name:p.name||p.email,picture:p.picture||""},env.SESSION_SECRET);return new Response(null,{status:302,headers:{Location:"/","Set-Cookie":`draw_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`}});}catch(e){console.error(e);return new Response("Login Google gagal. Periksa konfigurasi OAuth.",{status:500});}};
+import { createSession, requireDatabase } from "../projects/_shared.js";
+
+export const onRequestGet = async ({ request, env }) => {
+  try {
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.SESSION_SECRET) {
+      throw new Error("OAuth config incomplete");
+    }
+    const url = new URL(request.url);
+    const state = url.searchParams.get("state");
+    const code = url.searchParams.get("code");
+    const expected = (request.headers.get("cookie") || "").match(
+      /(?:^|; )oauth_state=([^;]+)/,
+    )?.[1];
+    if (!code || !state || state !== expected) {
+      return new Response("Invalid sign-in request.", { status: 400 });
+    }
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: `${url.origin}/api/auth/callback`,
+        grant_type: "authorization_code",
+      }),
+    });
+    if (!tokenResponse.ok) throw new Error("Token exchange failed");
+    const token = await tokenResponse.json();
+    const profileResponse = await fetch(
+      "https://openidconnect.googleapis.com/v1/userinfo",
+      { headers: { Authorization: `Bearer ${token.access_token}` } },
+    );
+    if (!profileResponse.ok) throw new Error("Profile request failed");
+    const profile = await profileResponse.json();
+    const now = new Date().toISOString();
+    await requireDatabase(env)
+      .prepare(
+        "INSERT INTO users(id,email,name,picture,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET email=excluded.email,name=excluded.name,picture=excluded.picture,updated_at=excluded.updated_at",
+      )
+      .bind(
+        profile.sub,
+        profile.email,
+        profile.name || profile.email,
+        profile.picture || "",
+        now,
+        now,
+      )
+      .run();
+    const session = await createSession(
+      {
+        sub: profile.sub,
+        email: profile.email,
+        name: profile.name || profile.email,
+        picture: profile.picture || "",
+      },
+      env.SESSION_SECRET,
+    );
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: "/",
+        "Set-Cookie": `draw_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return new Response(
+      "Google sign-in failed. Check the OAuth configuration.",
+      { status: 500 },
+    );
+  }
+};

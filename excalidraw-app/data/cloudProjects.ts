@@ -9,10 +9,10 @@ type ResponseProject=CloudProjectAccess&{scene:ExcalidrawInitialDataState;create
 type Snapshot={elements:readonly OrderedExcalidrawElement[];appState:AppState;files:BinaryFiles;title:string};
 let timer:ReturnType<typeof setTimeout>|null=null,pending:Snapshot|null=null,saving=false,status:CloudProjectSaveStatus="idle";
 const listeners=new Set<(s:CloudProjectSaveStatus)=>void>(),emit=(s:CloudProjectSaveStatus)=>{status=s;listeners.forEach(x=>x(s));};
-const parse=async<T>(r:Response):Promise<T>=>{const d=await r.json().catch(()=>null) as (T&{error?:string})|null;if(!r.ok)throw new Error(d?.error||"Permintaan penyimpanan proyek gagal.");return d as T;};
+const parse=async<T>(r:Response):Promise<T>=>{const d=await r.json().catch(()=>null) as (T&{error?:string})|null;if(!r.ok)throw new Error(d?.error||"The project request failed.");return d as T;};
 const scene=(s:Snapshot)=>JSON.parse(serializeAsJSON(s.elements,s.appState,s.files,"database")) as ExcalidrawInitialDataState;
 export const getProjectLink=(p:Pick<CloudProjectAccess,"id">)=>`${location.origin}${location.pathname}${PREFIX}${p.id}`;
-export const getActiveCloudProject=():CloudProjectAccess|null=>{const id=location.hash.match(/^#project=([^,]+)$/)?.[1];return id?{id,title:"Proyek Excalidraw",updatedAt:""}:null;};
+export const getActiveCloudProject=():CloudProjectAccess|null=>{const id=location.hash.match(/^#project=([^,]+)$/)?.[1];return id?{id,title:"Excalidraw project",updatedAt:""}:null;};
 export const getCurrentUser=async()=>{const r=await fetch("/api/auth/me");return r.ok?(await r.json() as {user:CloudUser}).user:null;};
 export const getKnownCloudProjects=async()=>parse<CloudProjectAccess[]>(await fetch("/api/projects"));
 export const subscribeToCloudSaveStatus=(fn:(s:CloudProjectSaveStatus)=>void)=>{listeners.add(fn);fn(status);return()=>{listeners.delete(fn);};};

@@ -1,13 +1,194 @@
 import { useEffect, useMemo, useState } from "react";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
-import { createCloudProject, deleteCloudProject, getActiveCloudProject, getCurrentUser, getKnownCloudProjects, getProjectLink, openCloudProject } from "../data/cloudProjects";
+
+import {
+  createCloudProject,
+  deleteCloudProject,
+  getActiveCloudProject,
+  getCurrentUser,
+  getKnownCloudProjects,
+  getProjectLink,
+  openCloudProject,
+} from "../data/cloudProjects";
+
 import type { CloudProjectAccess, CloudUser } from "../data/cloudProjects";
-export const CloudProjectsDialog=({excalidrawAPI,onClose}:{excalidrawAPI:ExcalidrawImperativeAPI;onClose:()=>void})=>{
- const active=useMemo(()=>getActiveCloudProject(),[]),[projects,setProjects]=useState<CloudProjectAccess[]>([]),[user,setUser]=useState<CloudUser|null>(null),[title,setTitle]=useState(excalidrawAPI.getName()||"Proyek tanpa judul"),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- useEffect(()=>{const key=(e:KeyboardEvent)=>e.key==="Escape"&&onClose();addEventListener("keydown",key);void(async()=>{const u=await getCurrentUser();setUser(u);if(u)setProjects(await getKnownCloudProjects());})();return()=>removeEventListener("keydown",key);},[onClose]);
- const create=async()=>{setBusy(true);try{const p=await createCloudProject({elements:excalidrawAPI.getSceneElementsIncludingDeleted(),appState:excalidrawAPI.getAppState(),files:excalidrawAPI.getFiles(),title:title.trim()||"Proyek tanpa judul"});location.href=getProjectLink(p);}catch(e){setMessage(e instanceof Error?e.message:"Gagal menyimpan.");setBusy(false);}};
- const remove=async(p:CloudProjectAccess)=>{if(!confirm(`Hapus proyek “${p.title}”?`))return;setBusy(true);try{await deleteCloudProject(p);setProjects(await getKnownCloudProjects());if(active?.id===p.id)location.assign(location.pathname);}catch(e){setMessage(e instanceof Error?e.message:"Gagal menghapus.");}finally{setBusy(false);}};
- return <div className="cloud-projects-backdrop" role="presentation"><section aria-labelledby="cloud-projects-title" aria-modal="true" className="cloud-projects-dialog" role="dialog"><header><div><h2 id="cloud-projects-title">Proyek Saya</h2><p>{user?`Masuk sebagai ${user.email}`:"Masuk agar proyek tersedia di semua perangkat."}</p></div><button aria-label="Tutup" className="cloud-projects-close" onClick={onClose} type="button">×</button></header>
- {!user?<div className="cloud-projects-create"><a href="/api/auth/login"><button type="button">Masuk dengan Google</button></a></div>:<><div className="cloud-projects-create"><label htmlFor="cloud-project-title">Nama proyek</label><div><input id="cloud-project-title" onChange={e=>setTitle(e.target.value)} value={title}/><button disabled={busy} onClick={()=>void create()} type="button">Simpan sebagai proyek baru</button></div></div>{message&&<p className="cloud-projects-message">{message}</p>}<div className="cloud-projects-list">{projects.length===0?<p className="cloud-projects-empty">Belum ada proyek tersimpan.</p>:projects.map(p=><article className={active?.id===p.id?"is-active":undefined} key={p.id}><div><strong>{p.title}</strong><small>Diperbarui {new Date(p.updatedAt).toLocaleString("id-ID")}</small></div><div className="cloud-projects-actions"><button disabled={busy} onClick={()=>openCloudProject(p)} type="button">Buka</button><button className="danger" disabled={busy} onClick={()=>void remove(p)} type="button">Hapus</button></div></article>)}</div><button onClick={async()=>{await fetch("/api/auth/logout",{method:"POST"});location.assign("/");}} type="button">Keluar</button></>}
- </section></div>;
+
+export const CloudProjectsDialog = ({
+  excalidrawAPI,
+  onClose,
+}: {
+  excalidrawAPI: ExcalidrawImperativeAPI;
+  onClose: () => void;
+}) => {
+  const activeProject = useMemo(() => getActiveCloudProject(), []);
+  const [projects, setProjects] = useState<CloudProjectAccess[]>([]);
+  const [user, setUser] = useState<CloudUser | null>(null);
+  const [title, setTitle] = useState(
+    excalidrawAPI.getName() || "Untitled project",
+  );
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    void (async () => {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      if (currentUser) {
+        setProjects(await getKnownCloudProjects());
+      }
+    })();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const createProject = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const project = await createCloudProject({
+        elements: excalidrawAPI.getSceneElementsIncludingDeleted(),
+        appState: excalidrawAPI.getAppState(),
+        files: excalidrawAPI.getFiles(),
+        title: title.trim() || "Untitled project",
+      });
+      window.location.href = getProjectLink(project);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save project.");
+      setBusy(false);
+    }
+  };
+
+  const removeProject = async (project: CloudProjectAccess) => {
+    if (!window.confirm(`Delete “${project.title}”?`)) {
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      await deleteCloudProject(project);
+      setProjects(await getKnownCloudProjects());
+      if (activeProject?.id === project.id) {
+        window.location.assign(window.location.pathname);
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not delete project.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.assign("/");
+  };
+
+  return (
+    <div className="cloud-projects-backdrop" role="presentation">
+      <section
+        aria-labelledby="cloud-projects-title"
+        aria-modal="true"
+        className="cloud-projects-dialog"
+        role="dialog"
+      >
+        <header>
+          <div>
+            <h2 id="cloud-projects-title">My Projects</h2>
+            <p>
+              {user
+                ? `Signed in as ${user.email}`
+                : "Sign in to access your projects on every device."}
+            </p>
+          </div>
+          <button
+            aria-label="Close"
+            className="cloud-projects-close"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </header>
+
+        {!user ? (
+          <div className="cloud-projects-create">
+            <a href="/api/auth/login">
+              <button type="button">Sign in with Google</button>
+            </a>
+          </div>
+        ) : (
+          <>
+            <div className="cloud-projects-create">
+              <label htmlFor="cloud-project-title">Project name</label>
+              <div>
+                <input
+                  id="cloud-project-title"
+                  onChange={(event) => setTitle(event.target.value)}
+                  value={title}
+                />
+                <button
+                  disabled={busy}
+                  onClick={() => void createProject()}
+                  type="button"
+                >
+                  Save as new project
+                </button>
+              </div>
+            </div>
+
+            {message && <p className="cloud-projects-message">{message}</p>}
+
+            <div className="cloud-projects-list">
+              {projects.length === 0 ? (
+                <p className="cloud-projects-empty">No saved projects yet.</p>
+              ) : (
+                projects.map((project) => (
+                  <article
+                    className={
+                      activeProject?.id === project.id ? "is-active" : undefined
+                    }
+                    key={project.id}
+                  >
+                    <div>
+                      <strong>{project.title}</strong>
+                      <small>
+                        Updated {new Date(project.updatedAt).toLocaleString()}
+                      </small>
+                    </div>
+                    <div className="cloud-projects-actions">
+                      <button
+                        disabled={busy}
+                        onClick={() => openCloudProject(project)}
+                        type="button"
+                      >
+                        Open
+                      </button>
+                      <button
+                        className="danger"
+                        disabled={busy}
+                        onClick={() => void removeProject(project)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+            <button onClick={() => void logout()} type="button">
+              Sign out
+            </button>
+          </>
+        )}
+      </section>
+    </div>
+  );
 };
