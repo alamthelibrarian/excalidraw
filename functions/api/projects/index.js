@@ -1,32 +1,3 @@
-import {
-  handleError,
-  hashToken,
-  json,
-  randomToken,
-  readBody,
-  requireDatabase,
-} from "./_shared.js";
-
-export const onRequestPost = async ({ request, env }) => {
-  try {
-    const db = requireDatabase(env);
-    const { title, sceneData } = await readBody(request);
-    const id = crypto.randomUUID();
-    const token = randomToken();
-    const tokenHash = await hashToken(token);
-    const now = new Date().toISOString();
-
-    await db
-      .prepare(
-        `INSERT INTO projects
-          (id, token_hash, title, scene_data, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(id, tokenHash, title, sceneData, now, now)
-      .run();
-
-    return json({ id, token, title, updatedAt: now }, 201);
-  } catch (error) {
-    return handleError(error);
-  }
-};
+import{getSession,handleError,json,readBody,requireDatabase}from"./_shared.js";
+export const onRequestGet=async({request,env})=>{try{const u=await getSession(request,env),r=await requireDatabase(env).prepare("SELECT id,title,created_at,updated_at FROM projects WHERE user_id=? ORDER BY updated_at DESC").bind(u.sub).all();return json(r.results.map(x=>({id:x.id,title:x.title,createdAt:x.created_at,updatedAt:x.updated_at})));}catch(e){return handleError(e);}};
+export const onRequestPost=async({request,env})=>{try{const u=await getSession(request,env),{title,sceneData}=await readBody(request),id=crypto.randomUUID(),now=new Date().toISOString();await requireDatabase(env).prepare("INSERT INTO projects(id,user_id,title,scene_data,created_at,updated_at) VALUES(?,?,?,?,?,?)").bind(id,u.sub,title,sceneData,now,now).run();return json({id,title,updatedAt:now},201);}catch(e){return handleError(e);}};
