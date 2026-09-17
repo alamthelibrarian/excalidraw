@@ -146,6 +146,15 @@ import "./index.scss";
 
 import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
 import { AppSidebar } from "./components/AppSidebar";
+import { CloudProjectsDialog } from "./components/CloudProjectsDialog";
+import {
+  getActiveCloudProject,
+  loadActiveCloudProject,
+  queueCloudProjectSave,
+  subscribeToCloudSaveStatus,
+} from "./data/cloudProjects";
+
+import type { CloudProjectSaveStatus } from "./data/cloudProjects";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -230,12 +239,8 @@ const initializeScene = async (opts: {
 
   const localDataState = importFromLocalStorage();
 
-  let scene: Omit<
-    RestoredDataState,
-    // we're not storing files in the scene database/localStorage, and instead
-    // fetch them async from a different store
-    "files"
-  > & {
+  let scene: Omit<RestoredDataState, "files"> & {
+    files?: BinaryFiles;
     scrollToContent?: boolean;
   } = {
     elements: restoreElements(localDataState?.elements, null, {
@@ -246,13 +251,21 @@ const initializeScene = async (opts: {
   };
 
   let roomLinkData = getCollaborationLinkData(window.location.href);
-  const isExternalScene = !!(id || jsonBackendMatch || roomLinkData);
+  const cloudProjectAccess = getActiveCloudProject();
+  const isExternalScene = !!(
+    id ||
+    jsonBackendMatch ||
+    roomLinkData ||
+    cloudProjectAccess
+  );
   if (isExternalScene) {
     if (
       // don't prompt if scene is empty
       !scene.elements.length ||
       // don't prompt for collab scenes because we don't override local storage
       roomLinkData ||
+      // opening a saved project is always an intentional navigation
+      cloudProjectAccess ||
       // otherwise, prompt whether user wants to override current scene
       (await openConfirmModal(shareableLinkConfirmDialog))
     ) {
@@ -277,9 +290,37 @@ const initializeScene = async (opts: {
             localDataState?.appState,
           ),
         };
+      } else if (cloudProjectAccess) {
+        try {
+          const project = await loadActiveCloudProject();
+          if (project) {
+            scene = {
+              elements: restoreElements(project.scene.elements, null, {
+                repairBindings: true,
+                deleteInvisibleElements: true,
+              }),
+              appState: restoreAppState(
+                project.scene.appState,
+                localDataState?.appState,
+              ),
+              files: project.scene.files,
+            };
+          }
+        } catch (error) {
+          scene = {
+            ...scene,
+            appState: {
+              ...scene.appState,
+              errorMessage:
+                error instanceof Error
+                  ? error.message
+                  : "Proyek cloud gagal dibuka.",
+            },
+          };
+        }
       }
       scene.scrollToContent = true;
-      if (!roomLinkData) {
+      if (!roomLinkData && !cloudProjectAccess) {
         window.history.replaceState({}, APP_NAME, window.location.origin);
       }
     } else {
@@ -374,6 +415,9 @@ const ExcalidrawWrapper = () => {
   const excalidrawAPI = useExcalidrawAPI();
 
   const [errorMessage, setErrorMessage] = useState("");
+  const [isCloudProjectsOpen, setIsCloudProjectsOpen] = useState(false);
+  const [cloudSaveStatus, setCloudSaveStatus] =
+    useState<CloudProjectSaveStatus>("idle");
   const isCollabDisabled = isRunningInIframe();
 
   const { editorTheme, appTheme, setAppTheme } = useHandleAppTheme();
@@ -381,6 +425,11 @@ const ExcalidrawWrapper = () => {
   const [langCode, setLangCode] = useAppLangCode();
 
   const editorInterface = useEditorInterface();
+
+  useEffect(
+    () => subscribeToCloudSaveStatus(setCloudSaveStatus),
+    [],
+  );
 
   // initial state
   // ---------------------------------------------------------------------------
@@ -440,6 +489,11 @@ const ExcalidrawWrapper = () => {
   const loadImages = useCallback(
     (data: ResolutionType<typeof initializeScene>, isInitialLoad = false) => {
       if (!data.scene || !excalidrawAPI) {
+        return;
+      }
+
+      if (getActiveCloudProject() && data.scene.files) {
+        excalidrawAPI.addFiles(Object.values(data.scene.files));
         return;
       }
 
@@ -715,6 +769,16 @@ const ExcalidrawWrapper = () => {
       });
     }
 
+    queueCloudProjectSave({
+      elements,
+      appState,
+      files,
+      title:
+        getActiveCloudProject()?.title ||
+        excalidrawAPI?.getName() ||
+        "Proyek tanpa judul",
+    });
+
     // Render the debug scene if the debug canvas is available
     if (debugCanvasRef.current && excalidrawAPI) {
       debugRenderer(
@@ -953,26 +1017,46 @@ const ExcalidrawWrapper = () => {
         theme={editorTheme}
         onThemeChange={setAppTheme}
         renderTopRightUI={(isMobile) => {
-          if (isMobile || !collabAPI || isCollabDisabled) {
-            return null;
-          }
-
           return (
             <div className="excalidraw-ui-top-right">
-              {excalidrawAPI?.getEditorInterface().formFactor === "desktop" && (
+              {!isMobile && (
+                <button
+                  className="cloud-projects-trigger"
+                  onClick={() => setIsCloudProjectsOpen(true)}
+                  type="button"
+                >
+                  {cloudSaveStatus === "saving"
+                    ? "Menyimpan…"
+                    : cloudSaveStatus === "saved"
+                    ? "Tersimpan ✓"
+                    : cloudSaveStatus === "error"
+                    ? "Gagal menyimpan"
+                    : "Proyek"}
+                </button>
+              )}
+              {!isMobile &&
+                collabAPI &&
+                !isCollabDisabled &&
+                excalidrawAPI?.getEditorInterface().formFactor === "desktop" && (
                 <ExcalidrawPlusPromoBanner
                   isSignedIn={isExcalidrawPlusSignedUser}
                 />
               )}
 
-              {collabError.message && <CollabError collabError={collabError} />}
-              <LiveCollaborationTrigger
-                isCollaborating={isCollaborating}
-                onSelect={() =>
-                  setShareDialogState({ isOpen: true, type: "share" })
-                }
-                editorInterface={editorInterface}
-              />
+              {!isMobile && collabAPI && !isCollabDisabled && (
+                <>
+                  {collabError.message && (
+                    <CollabError collabError={collabError} />
+                  )}
+                  <LiveCollaborationTrigger
+                    isCollaborating={isCollaborating}
+                    onSelect={() =>
+                      setShareDialogState({ isOpen: true, type: "share" })
+                    }
+                    editorInterface={editorInterface}
+                  />
+                </>
+              )}
             </div>
           );
         }}
@@ -993,6 +1077,7 @@ const ExcalidrawWrapper = () => {
           isCollabEnabled={!isCollabDisabled}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
+          onCloudProjectsOpen={() => setIsCloudProjectsOpen(true)}
         />
         <AppWelcomeScreen
           onCollabDialogOpen={onCollabDialogOpen}
@@ -1257,6 +1342,12 @@ const ExcalidrawWrapper = () => {
           />
         )}
       </Excalidraw>
+      {isCloudProjectsOpen && excalidrawAPI && (
+        <CloudProjectsDialog
+          excalidrawAPI={excalidrawAPI}
+          onClose={() => setIsCloudProjectsOpen(false)}
+        />
+      )}
     </div>
   );
 };
