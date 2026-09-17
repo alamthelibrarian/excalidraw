@@ -58,7 +58,7 @@ export const CloudProjectsDialog = ({
         title: title.trim() || "Untitled project",
       });
       onClose();
-      await openCloudProject(project);
+      void openCloudProject(project);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save project.");
       setBusy(false);
@@ -197,10 +197,13 @@ export const CloudProjectsDialog = ({
                       </button>
                       <button
                         disabled={busy}
-                        onClick={() => {
-                          onClose();
-                          void openCloudProject(project);
-                        }}
+                        onClick={() =>
+                          void (async () => {
+                            if (await openCloudProject(project)) {
+                              onClose();
+                            }
+                          })()
+                        }
                         type="button"
                       >
                         Open

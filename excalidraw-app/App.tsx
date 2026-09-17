@@ -133,9 +133,11 @@ import { AppSidebar } from "./components/AppSidebar";
 import { CloudProjectsDialog } from "./components/CloudProjectsDialog";
 import {
   getActiveCloudProject,
+  hasUnsavedCloudChanges,
   loadActiveCloudProject,
-  queueCloudProjectSave,
+  saveCloudProjectNow,
   subscribeToCloudSaveStatus,
+  updateCloudProjectDraft,
 } from "./data/cloudProjects";
 
 import type { CloudProjectSaveStatus } from "./data/cloudProjects";
@@ -692,10 +694,11 @@ const ExcalidrawWrapper = () => {
       LocalData.flushSave();
 
       if (
-        excalidrawAPI &&
-        LocalData.fileStorage.shouldPreventUnload(
-          excalidrawAPI.getSceneElements(),
-        )
+        hasUnsavedCloudChanges() ||
+        (excalidrawAPI &&
+          LocalData.fileStorage.shouldPreventUnload(
+            excalidrawAPI.getSceneElements(),
+          ))
       ) {
         if (import.meta.env.VITE_APP_DISABLE_PREVENT_UNLOAD !== "true") {
           preventUnload(event);
@@ -753,7 +756,7 @@ const ExcalidrawWrapper = () => {
       });
     }
 
-    queueCloudProjectSave({
+    updateCloudProjectDraft({
       elements,
       appState,
       files,
@@ -938,10 +941,14 @@ const ExcalidrawWrapper = () => {
         renderTopRightUI={(isMobile) => {
           return (
             <div className="excalidraw-ui-top-right">
-              {!isMobile && (
+              {!isMobile && getActiveCloudProject() && (
                 <button
                   className="cloud-projects-trigger"
-                  onClick={() => setIsCloudProjectsOpen(true)}
+                  disabled={
+                    cloudSaveStatus !== "dirty" &&
+                    cloudSaveStatus !== "error"
+                  }
+                  onClick={() => void saveCloudProjectNow()}
                   type="button"
                 >
                   {cloudSaveStatus === "saving"
@@ -949,8 +956,19 @@ const ExcalidrawWrapper = () => {
                     : cloudSaveStatus === "saved"
                     ? "Saved ✓"
                     : cloudSaveStatus === "error"
-                    ? "Save failed"
-                    : "Projects"}
+                    ? "Retry save"
+                    : cloudSaveStatus === "dirty"
+                    ? "Save changes"
+                    : "Save"}
+                </button>
+              )}
+              {!isMobile && (
+                <button
+                  className="cloud-projects-trigger"
+                  onClick={() => setIsCloudProjectsOpen(true)}
+                  type="button"
+                >
+                  Projects
                 </button>
               )}
               {!isMobile && collabAPI && !isCollabDisabled && (
