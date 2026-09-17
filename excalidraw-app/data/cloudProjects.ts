@@ -7,14 +7,17 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 const PREFIX = "#project=";
-const SAVE_DELAY = 2000;
-
 export type CloudProjectAccess = {
   id: string;
   title: string;
   updatedAt: string;
 };
-export type CloudProjectSaveStatus = "idle" | "saving" | "saved" | "error";
+export type CloudProjectSaveStatus =
+  | "idle"
+  | "dirty"
+  | "saving"
+  | "saved"
+  | "error";
 export type CloudUser = { email: string; name: string; picture: string };
 
 type ResponseProject = CloudProjectAccess & {
@@ -28,11 +31,11 @@ type Snapshot = {
   title: string;
 };
 
-let timer: ReturnType<typeof setTimeout> | null = null;
 let pending: Snapshot | null = null;
 let saving = false;
 let lastSavedPayload: string | null = null;
 let activeProject: CloudProjectAccess | null = null;
+let ignoreNextDraft = false;
 let status: CloudProjectSaveStatus = "idle";
 
 const listeners = new Set<(status: CloudProjectSaveStatus) => void>();
@@ -114,6 +117,7 @@ export const loadActiveCloudProject = async () => {
     title: loaded.title,
     updatedAt: loaded.updatedAt,
   };
+  ignoreNextDraft = true;
   return loaded;
 };
 
@@ -127,6 +131,8 @@ export const createCloudProject = async (snapshot: Snapshot) => {
     }),
   );
   lastSavedPayload = body;
+  pending = null;
+  emit("saved");
   return project;
 };
 
@@ -157,36 +163,32 @@ const save = async () => {
     lastSavedPayload = body;
     emit("saved");
   } catch (error) {
+    pending = snapshot;
     console.error(error);
     emit("error");
   } finally {
     saving = false;
-    if (pending) {
-      void save();
+    if (pending && status !== "error") {
+      emit("dirty");
     }
   }
 };
 
-export const queueCloudProjectSave = (snapshot: Snapshot) => {
+export const hasUnsavedCloudChanges = () => !!pending;
+
+export const updateCloudProjectDraft = (snapshot: Snapshot) => {
   if (!getActiveCloudProject()) {
     return;
   }
-  pending = snapshot;
-  emit("saving");
-  if (timer) {
-    clearTimeout(timer);
+  if (ignoreNextDraft) {
+    ignoreNextDraft = false;
+    return;
   }
-  timer = setTimeout(() => {
-    timer = null;
-    void save();
-  }, SAVE_DELAY);
+  pending = snapshot;
+  emit("dirty");
 };
 
-const flushCloudProjectSave = async () => {
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
-  }
+export const saveCloudProjectNow = async () => {
   while (saving) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -217,22 +219,41 @@ export const renameCloudProject = async (
   if (activeProject?.id === updated.id) {
     activeProject = updated;
   }
+  if (pending) {
+    pending = { ...pending, title: updated.title };
+  }
+  if (lastSavedPayload) {
+    const previous = JSON.parse(lastSavedPayload);
+    lastSavedPayload = JSON.stringify({ ...previous, title: updated.title });
+  }
   return updated;
 };
 
 export const openCloudProject = async (project: CloudProjectAccess) => {
-  await flushCloudProjectSave();
+  while (saving) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (
+    pending &&
+    !window.confirm("Discard unsaved changes and open another project?")
+  ) {
+    return false;
+  }
+  pending = null;
+  emit("idle");
   history.pushState(
     {},
     document.title,
     `${location.pathname}${PREFIX}${project.id}`,
   );
   location.reload();
+  return true;
 };
 
 export const detachActiveCloudProject = () => {
   history.replaceState({}, document.title, location.pathname);
   lastSavedPayload = null;
   activeProject = null;
+  pending = null;
   emit("idle");
 };
