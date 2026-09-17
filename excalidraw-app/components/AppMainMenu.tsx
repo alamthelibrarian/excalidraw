@@ -2,6 +2,7 @@ import {
   loginIcon,
   ExcalLogo,
   eyeIcon,
+  save,
 } from "@excalidraw/excalidraw/components/icons";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
@@ -21,6 +22,7 @@ export const AppMainMenu: React.FC<{
   isCollabEnabled: boolean;
   theme: Theme | "system";
   refresh: () => void;
+  onCloudProjectsOpen: () => void;
 }> = React.memo((props) => {
   return (
     <MainMenu>
@@ -28,6 +30,9 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.SaveToActiveFile />
       <MainMenu.DefaultItems.Export />
       <MainMenu.DefaultItems.SaveAsImage />
+      <MainMenu.Item icon={save} onSelect={props.onCloudProjectsOpen}>
+        Proyek Saya
+      </MainMenu.Item>
       {props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
           isCollaborating={props.isCollaborating}
