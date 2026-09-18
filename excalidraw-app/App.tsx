@@ -182,6 +182,9 @@ window.addEventListener(
 
 let isSelfEmbedding = false;
 
+const SHARE_LINK_HASH = /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/;
+const isReadonlyShareLink = SHARE_LINK_HASH.test(window.location.hash);
+
 if (window.self !== window.top) {
   try {
     const parentUrl = new URL(document.referrer);
@@ -218,9 +221,7 @@ const initializeScene = async (opts: {
 > => {
   const searchParams = new URLSearchParams(window.location.search);
   const id = searchParams.get("id");
-  const jsonBackendMatch = window.location.hash.match(
-    /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/,
-  );
+  const jsonBackendMatch = window.location.hash.match(SHARE_LINK_HASH);
   const externalUrlMatch = window.location.hash.match(/^#url=(.*)$/);
 
   const localDataState = importFromLocalStorage();
@@ -924,6 +925,12 @@ const ExcalidrawWrapper = () => {
         onChange={onChange}
         onExport={onExport}
         initialData={initialStatePromiseRef.current.promise}
+        viewModeEnabled={isReadonlyShareLink}
+        interaction={
+          isReadonlyShareLink
+            ? { enabled: { navigation: true, interactiveContent: true } }
+            : true
+        }
         isCollaborating={isCollaborating}
         onPointerUpdate={collabAPI?.onPointerUpdate}
         UIOptions={{
@@ -942,7 +949,9 @@ const ExcalidrawWrapper = () => {
         renderTopRightUI={(isMobile) => {
           return (
             <div className="excalidraw-ui-top-right">
-              {!isMobile && getActiveCloudProject() && (
+              {!isReadonlyShareLink &&
+                !isMobile &&
+                getActiveCloudProject() && (
                 <button
                   className="cloud-projects-trigger"
                   disabled={
@@ -963,7 +972,7 @@ const ExcalidrawWrapper = () => {
                     : "Save"}
                 </button>
               )}
-              {!isMobile && (
+              {!isReadonlyShareLink && !isMobile && (
                 <button
                   className="cloud-projects-trigger"
                   onClick={() => setIsCloudProjectsOpen(true)}
@@ -972,7 +981,10 @@ const ExcalidrawWrapper = () => {
                   Projects
                 </button>
               )}
-              {!isMobile && collabAPI && !isCollabDisabled && (
+              {!isReadonlyShareLink &&
+                !isMobile &&
+                collabAPI &&
+                !isCollabDisabled && (
                 <>
                   {collabError.message && (
                     <CollabError collabError={collabError} />
