@@ -954,11 +954,25 @@ const ExcalidrawWrapper = () => {
                 getActiveCloudProject() && (
                 <button
                   className="cloud-projects-trigger"
-                  disabled={
-                    cloudSaveStatus !== "dirty" &&
-                    cloudSaveStatus !== "error"
-                  }
-                  onClick={() => void saveCloudProjectNow()}
+                  disabled={cloudSaveStatus === "saving"}
+                  onClick={() => {
+                    requestAnimationFrame(() => {
+                      if (!excalidrawAPI) {
+                        return;
+                      }
+                      updateCloudProjectDraft({
+                        elements:
+                          excalidrawAPI.getSceneElementsIncludingDeleted(),
+                        appState: excalidrawAPI.getAppState(),
+                        files: excalidrawAPI.getFiles(),
+                        title:
+                          getActiveCloudProject()?.title ||
+                          excalidrawAPI.getName() ||
+                          "Untitled project",
+                      });
+                      void saveCloudProjectNow();
+                    });
+                  }}
                   type="button"
                 >
                   {cloudSaveStatus === "saving"
@@ -967,9 +981,7 @@ const ExcalidrawWrapper = () => {
                     ? "Saved ✓"
                     : cloudSaveStatus === "error"
                     ? "Retry save"
-                    : cloudSaveStatus === "dirty"
-                    ? "Save changes"
-                    : "Save"}
+                    : "Save changes"}
                 </button>
               )}
               {!isReadonlyShareLink && !isMobile && (
