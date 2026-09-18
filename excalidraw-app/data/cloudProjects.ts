@@ -35,7 +35,6 @@ let pending: Snapshot | null = null;
 let saving = false;
 let lastSavedPayload: string | null = null;
 let activeProject: CloudProjectAccess | null = null;
-let ignoreNextDraft = false;
 let status: CloudProjectSaveStatus = "idle";
 
 const listeners = new Set<(status: CloudProjectSaveStatus) => void>();
@@ -117,7 +116,6 @@ export const loadActiveCloudProject = async () => {
     title: loaded.title,
     updatedAt: loaded.updatedAt,
   };
-  ignoreNextDraft = true;
   return loaded;
 };
 
@@ -178,10 +176,6 @@ export const hasUnsavedCloudChanges = () => !!pending;
 
 export const updateCloudProjectDraft = (snapshot: Snapshot) => {
   if (!getActiveCloudProject()) {
-    return;
-  }
-  if (ignoreNextDraft) {
-    ignoreNextDraft = false;
     return;
   }
   pending = snapshot;
