@@ -308,7 +308,7 @@ const initializeScene = async (opts: {
         }
       }
       scene.scrollToContent = true;
-      if (!roomLinkData && !cloudProjectAccess) {
+      if (!roomLinkData && !cloudProjectAccess && !jsonBackendMatch) {
         window.history.replaceState({}, APP_NAME, window.location.origin);
       }
     } else {
