@@ -275,6 +275,7 @@ const initializeScene = async (opts: {
             // localStorage user settings which we do not persist on server.
             localDataState?.appState,
           ),
+          files: imported.files || undefined,
         };
       } else if (cloudProjectAccess) {
         try {
@@ -478,7 +479,7 @@ const ExcalidrawWrapper = () => {
         return;
       }
 
-      if (getActiveCloudProject() && data.scene.files) {
+      if (data.scene.files) {
         excalidrawAPI.addFiles(Object.values(data.scene.files));
         return;
       }

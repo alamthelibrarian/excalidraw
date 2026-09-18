@@ -60,7 +60,7 @@ const scene = (snapshot: Snapshot) =>
       snapshot.elements,
       snapshot.appState,
       snapshot.files,
-      "database",
+      "local",
     ),
   ) as ExcalidrawInitialDataState;
 
