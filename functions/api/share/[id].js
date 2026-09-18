@@ -13,7 +13,11 @@ export const onRequestGet = async ({ env, params }) => {
     if (!row) {
       throw new ResponseError(404, "Shared drawing not found.");
     }
-    return new Response(row.payload, {
+    const payload =
+      row.payload instanceof ArrayBuffer
+        ? row.payload
+        : new Uint8Array(row.payload).buffer;
+    return new Response(payload, {
       headers: {
         "Content-Type": "application/octet-stream",
         "Cache-Control": "public, max-age=31536000, immutable",
