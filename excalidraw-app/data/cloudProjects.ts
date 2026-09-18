@@ -134,10 +134,10 @@ export const createCloudProject = async (snapshot: Snapshot) => {
   return project;
 };
 
-const save = async () => {
+const save = async (): Promise<boolean> => {
   const project = getActiveCloudProject();
   if (!project || !pending || saving) {
-    return;
+    return false;
   }
 
   const snapshot = pending;
@@ -149,7 +149,7 @@ const save = async () => {
     const body = serializeSnapshot(snapshot);
     if (body === lastSavedPayload) {
       emit("saved");
-      return;
+      return true;
     }
     await parse(
       await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
@@ -160,10 +160,12 @@ const save = async () => {
     );
     lastSavedPayload = body;
     emit("saved");
+    return true;
   } catch (error) {
     pending = snapshot;
     console.error(error);
     emit("error");
+    return false;
   } finally {
     saving = false;
     if (pending && status !== "error") {
@@ -187,8 +189,9 @@ export const saveCloudProjectNow = async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   if (pending) {
-    await save();
+    return save();
   }
+  return false;
 };
 
 export const deleteCloudProject = async (project: CloudProjectAccess) => {

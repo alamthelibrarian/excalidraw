@@ -956,7 +956,10 @@ const ExcalidrawWrapper = () => {
                   className="cloud-projects-trigger"
                   disabled={cloudSaveStatus === "saving"}
                   onClick={() => {
-                    requestAnimationFrame(() => {
+                    if (document.activeElement instanceof HTMLElement) {
+                      document.activeElement.blur();
+                    }
+                    requestAnimationFrame(async () => {
                       if (!excalidrawAPI) {
                         return;
                       }
@@ -970,7 +973,12 @@ const ExcalidrawWrapper = () => {
                           excalidrawAPI.getName() ||
                           "Untitled project",
                       });
-                      void saveCloudProjectNow();
+                      const saved = await saveCloudProjectNow();
+                      excalidrawAPI.setToast({
+                        message: saved
+                          ? "Project saved."
+                          : "The project could not be saved.",
+                      });
                     });
                   }}
                   type="button"
