@@ -34,6 +34,7 @@ type Snapshot = {
 let pending: Snapshot | null = null;
 let saving = false;
 let lastSavedPayload: string | null = null;
+let lastSavedFingerprint: string | null = null;
 let activeProject: CloudProjectAccess | null = null;
 let status: CloudProjectSaveStatus = "idle";
 
@@ -65,6 +66,51 @@ const scene = (snapshot: Snapshot) =>
 
 const serializeSnapshot = (snapshot: Snapshot) =>
   JSON.stringify({ title: snapshot.title, scene: scene(snapshot) });
+
+const fingerprint = ({
+  elements = [],
+  appState = {},
+  files = {},
+  title,
+}: {
+  elements?: readonly Pick<
+    OrderedExcalidrawElement,
+    "id" | "version" | "versionNonce" | "isDeleted"
+  >[] | null;
+  appState?: Partial<AppState> | null;
+  files?: BinaryFiles | null;
+  title: string;
+}) => {
+  const currentElements = elements || [];
+  const currentAppState = appState || {};
+  const currentFiles = files || {};
+  const referencedFileIds = new Set(
+    currentElements.flatMap((element) => {
+      const fileId = (element as { fileId?: string | null }).fileId;
+      return fileId ? [fileId] : [];
+    }),
+  );
+  return JSON.stringify([
+    title,
+    currentElements.map((element) => [
+      element.id,
+      element.version,
+      element.versionNonce,
+      element.isDeleted,
+    ]),
+    [
+      currentAppState.gridSize,
+      currentAppState.gridStep,
+      currentAppState.gridModeEnabled,
+      currentAppState.viewBackgroundColor,
+      currentAppState.lockedMultiSelections,
+    ],
+    Object.values(currentFiles)
+      .filter((file) => referencedFileIds.has(file.id))
+      .map((file) => [file.id, file.created, file.dataURL.length])
+      .sort(([left], [right]) => String(left).localeCompare(String(right))),
+  ]);
+};
 
 export const getProjectLink = (project: Pick<CloudProjectAccess, "id">) =>
   `${location.origin}${location.pathname}${PREFIX}${project.id}`;
@@ -111,6 +157,12 @@ export const loadActiveCloudProject = async () => {
     title: loaded.title,
     scene: loaded.scene,
   });
+  lastSavedFingerprint = fingerprint({
+    title: loaded.title,
+    elements: loaded.scene.elements,
+    appState: loaded.scene.appState,
+    files: loaded.scene.files,
+  });
   activeProject = {
     id: loaded.id,
     title: loaded.title,
@@ -129,6 +181,7 @@ export const createCloudProject = async (snapshot: Snapshot) => {
     }),
   );
   lastSavedPayload = body;
+  lastSavedFingerprint = fingerprint(snapshot);
   pending = null;
   emit("saved");
   return project;
@@ -159,17 +212,23 @@ const save = async (): Promise<boolean> => {
       }),
     );
     lastSavedPayload = body;
+    lastSavedFingerprint = fingerprint(snapshot);
     emit("saved");
     return true;
   } catch (error) {
-    pending = snapshot;
+    pending = pending || snapshot;
     console.error(error);
     emit("error");
     return false;
   } finally {
     saving = false;
     if (pending && status !== "error") {
-      emit("dirty");
+      if (fingerprint(pending) === lastSavedFingerprint) {
+        pending = null;
+        emit("saved");
+      } else {
+        emit("dirty");
+      }
     }
   }
 };
@@ -180,8 +239,17 @@ export const updateCloudProjectDraft = (snapshot: Snapshot) => {
   if (!getActiveCloudProject()) {
     return;
   }
+  if (fingerprint(snapshot) === lastSavedFingerprint) {
+    pending = null;
+    if (!saving) {
+      emit("saved");
+    }
+    return;
+  }
   pending = snapshot;
-  emit("dirty");
+  if (!saving) {
+    emit("dirty");
+  }
 };
 
 export const saveCloudProjectNow = async () => {
@@ -191,7 +259,7 @@ export const saveCloudProjectNow = async () => {
   if (pending) {
     return save();
   }
-  return false;
+  return status === "saved";
 };
 
 export const deleteCloudProject = async (project: CloudProjectAccess) => {
@@ -222,6 +290,12 @@ export const renameCloudProject = async (
   if (lastSavedPayload) {
     const previous = JSON.parse(lastSavedPayload);
     lastSavedPayload = JSON.stringify({ ...previous, title: updated.title });
+    lastSavedFingerprint = fingerprint({
+      title: updated.title,
+      elements: previous.scene?.elements,
+      appState: previous.scene?.appState,
+      files: previous.scene?.files,
+    });
   }
   return updated;
 };
@@ -250,6 +324,7 @@ export const openCloudProject = async (project: CloudProjectAccess) => {
 export const detachActiveCloudProject = () => {
   history.replaceState({}, document.title, location.pathname);
   lastSavedPayload = null;
+  lastSavedFingerprint = null;
   activeProject = null;
   pending = null;
   emit("idle");
