@@ -81,28 +81,31 @@ const fingerprint = ({
   files?: BinaryFiles | null;
   title: string;
 }) => {
+  const currentElements = elements || [];
+  const currentAppState = appState || {};
+  const currentFiles = files || {};
   const referencedFileIds = new Set(
-    elements.flatMap((element) => {
+    currentElements.flatMap((element) => {
       const fileId = (element as { fileId?: string | null }).fileId;
       return fileId ? [fileId] : [];
     }),
   );
   return JSON.stringify([
     title,
-    elements.map((element) => [
+    currentElements.map((element) => [
       element.id,
       element.version,
       element.versionNonce,
       element.isDeleted,
     ]),
     [
-      appState.gridSize,
-      appState.gridStep,
-      appState.gridModeEnabled,
-      appState.viewBackgroundColor,
-      appState.lockedMultiSelections,
+      currentAppState.gridSize,
+      currentAppState.gridStep,
+      currentAppState.gridModeEnabled,
+      currentAppState.viewBackgroundColor,
+      currentAppState.lockedMultiSelections,
     ],
-    Object.values(files)
+    Object.values(currentFiles)
       .filter((file) => referencedFileIds.has(file.id))
       .map((file) => [file.id, file.created, file.dataURL.length])
       .sort(([left], [right]) => String(left).localeCompare(String(right))),
