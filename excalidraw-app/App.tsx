@@ -54,6 +54,7 @@ import {
 
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+import type { ImportedDataState } from "@excalidraw/excalidraw/data/types";
 import type {
   FileId,
   NonDeletedExcalidrawElement,
@@ -202,6 +203,13 @@ if (window.self !== window.top) {
   }
 }
 
+const hasStoredViewport = (
+  appState: ImportedDataState["appState"] | null | undefined,
+) =>
+  Number.isFinite(appState?.scrollX) &&
+  Number.isFinite(appState?.scrollY) &&
+  Number.isFinite(appState?.zoom?.value);
+
 const shareableLinkConfirmDialog = {
   title: t("overwriteConfirm.modal.shareableLink.title"),
   description: (
@@ -301,6 +309,7 @@ const initializeScene = async (opts: {
             localDataState?.appState,
           ),
           files: imported.files || undefined,
+          scrollToContent: !hasStoredViewport(imported.appState),
         };
       } else if (cloudProjectAccess) {
         try {
@@ -316,6 +325,7 @@ const initializeScene = async (opts: {
                 localDataState?.appState,
               ),
               files: project.scene.files,
+              scrollToContent: !hasStoredViewport(project.scene.appState),
             };
           }
         } catch (error) {
@@ -331,7 +341,9 @@ const initializeScene = async (opts: {
           };
         }
       }
-      scene.scrollToContent = true;
+      if (scene.scrollToContent === undefined) {
+        scene.scrollToContent = true;
+      }
       if (!roomLinkData && !cloudProjectAccess && !jsonBackendMatch) {
         window.history.replaceState({}, APP_NAME, window.location.origin);
       }
