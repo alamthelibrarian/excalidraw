@@ -142,7 +142,7 @@ import {
 } from "./data/cloudProjects";
 import {
   SHARE_LINK_HASH,
-  isReadonlyShareHash,
+  getReadonlyShareHash,
 } from "./data/shareLinks";
 
 import type { CloudProjectSaveStatus } from "./data/cloudProjects";
@@ -187,9 +187,7 @@ window.addEventListener(
 
 let isSelfEmbedding = false;
 
-const readonlyShareHash = isReadonlyShareHash(window.location.hash)
-  ? window.location.hash
-  : null;
+const readonlyShareHash = getReadonlyShareHash(window.location.hash);
 const isReadonlyShareLink = readonlyShareHash !== null;
 
 if (window.self !== window.top) {
@@ -620,7 +618,7 @@ const ExcalidrawWrapper = () => {
     };
 
     const syncData = debounce(() => {
-      if (isTestEnv()) {
+      if (isTestEnv() || isReadonlyShareLink) {
         return;
       }
       if (
@@ -951,7 +949,7 @@ const ExcalidrawWrapper = () => {
     >
       <Excalidraw
         onChange={onChange}
-        onExport={onExport}
+        onExport={isReadonlyShareLink ? undefined : onExport}
         initialData={initialStatePromiseRef.current.promise}
         viewModeEnabled={isReadonlyShareLink}
         interaction={
@@ -980,7 +978,7 @@ const ExcalidrawWrapper = () => {
         langCode={langCode}
         renderCustomStats={renderCustomStats}
         detectScroll={false}
-        handleKeyboardGlobally={true}
+        handleKeyboardGlobally={!isReadonlyShareLink}
         autoFocus={true}
         theme={editorTheme}
         onThemeChange={setAppTheme}
