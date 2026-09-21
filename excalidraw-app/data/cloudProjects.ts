@@ -229,6 +229,7 @@ const save = async (): Promise<boolean> => {
   }
 
   const snapshot = pending;
+  let saveFailure: "conflict" | "error" | null = null;
   pending = null;
   saving = true;
   emit("saving");
@@ -268,16 +269,16 @@ const save = async (): Promise<boolean> => {
   } catch (error) {
     pending = pending || snapshot;
     console.error(error);
-    emit(
+    saveFailure =
       error instanceof CloudProjectRequestError && error.status === 409
         ? "conflict"
-        : "error",
-    );
+        : "error";
+    emit(saveFailure);
     return false;
   } finally {
     saving = false;
 
-    if (pending && status !== "error" && status !== "conflict") {
+    if (pending && saveFailure === null) {
       if (fingerprint(pending) === lastSavedFingerprint) {
         pending = null;
         emit("saved");
