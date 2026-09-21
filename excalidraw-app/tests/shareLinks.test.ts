@@ -1,5 +1,6 @@
 import {
   SHARE_LINK_HASH,
+  getReadonlyShareHash,
   isReadonlyShareHash,
 } from "../data/shareLinks";
 
@@ -16,6 +17,13 @@ describe("share link read-only detection", () => {
     const hash = "#json=snapshot-id,key_123";
     expect(SHARE_LINK_HASH.test(hash)).toBe(true);
     expect(isReadonlyShareHash(hash)).toBe(true);
+  });
+
+  it("locks the original share hash but not project/collaboration hashes", () => {
+    const hash = "#json=snapshot-id,key_123";
+    expect(getReadonlyShareHash(hash)).toBe(hash);
+    expect(getReadonlyShareHash("#room=room-id,room-key")).toBeNull();
+    expect(getReadonlyShareHash("#project=project-id")).toBeNull();
   });
 
   it("does not classify project or collaboration hashes as read-only shares", () => {
