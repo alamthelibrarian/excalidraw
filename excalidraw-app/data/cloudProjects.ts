@@ -7,29 +7,47 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 const PREFIX = "#project=";
+
 export type CloudProjectAccess = {
   id: string;
   title: string;
   updatedAt: string;
 };
+
 export type CloudProjectSaveStatus =
   | "idle"
   | "dirty"
   | "saving"
   | "saved"
+  | "conflict"
   | "error";
-export type CloudUser = { email: string; name: string; picture: string };
+
+export type CloudUser = {
+  email: string;
+  name: string;
+  picture: string;
+};
 
 type ResponseProject = CloudProjectAccess & {
   scene: ExcalidrawInitialDataState;
   createdAt: string;
 };
+
 type Snapshot = {
   elements: readonly OrderedExcalidrawElement[];
   appState: AppState;
   files: BinaryFiles;
   title: string;
 };
+
+class CloudProjectRequestError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 let pending: Snapshot | null = null;
 let saving = false;
@@ -39,6 +57,7 @@ let activeProject: CloudProjectAccess | null = null;
 let status: CloudProjectSaveStatus = "idle";
 
 const listeners = new Set<(status: CloudProjectSaveStatus) => void>();
+
 const emit = (nextStatus: CloudProjectSaveStatus) => {
   status = nextStatus;
   listeners.forEach((listener) => listener(nextStatus));
@@ -48,8 +67,12 @@ const parse = async <T>(response: Response): Promise<T> => {
   const data = (await response.json().catch(() => null)) as
     | (T & { error?: string })
     | null;
+
   if (!response.ok) {
-    throw new Error(data?.error || "The project request failed.");
+    throw new CloudProjectRequestError(
+      response.status,
+      data?.error || "The project request failed.",
+    );
   }
   return data as T;
 };
@@ -90,6 +113,7 @@ const fingerprint = ({
       return fileId ? [fileId] : [];
     }),
   );
+
   return JSON.stringify([
     title,
     currentElements.map((element) => [
@@ -120,6 +144,7 @@ export const getActiveCloudProject = (): CloudProjectAccess | null => {
   if (!id) {
     return null;
   }
+
   return activeProject?.id === id
     ? activeProject
     : { id, title: "Untitled project", updatedAt: "" };
@@ -145,14 +170,18 @@ export const subscribeToCloudSaveStatus = (
   };
 };
 
+export const getCloudSaveStatus = () => status;
+
 export const loadActiveCloudProject = async () => {
   const project = getActiveCloudProject();
   if (!project) {
     return null;
   }
+
   const loaded = await parse<ResponseProject>(
     await fetch(`/api/projects/${encodeURIComponent(project.id)}`),
   );
+
   lastSavedPayload = JSON.stringify({
     title: loaded.title,
     scene: loaded.scene,
@@ -168,6 +197,9 @@ export const loadActiveCloudProject = async () => {
     title: loaded.title,
     updatedAt: loaded.updatedAt,
   };
+  pending = null;
+  emit("saved");
+
   return loaded;
 };
 
@@ -180,16 +212,19 @@ export const createCloudProject = async (snapshot: Snapshot) => {
       body,
     }),
   );
+
   lastSavedPayload = body;
   lastSavedFingerprint = fingerprint(snapshot);
   pending = null;
+  activeProject = project;
   emit("saved");
+
   return project;
 };
 
 const save = async (): Promise<boolean> => {
   const project = getActiveCloudProject();
-  if (!project || !pending || saving) {
+  if (!project || !pending || saving || status === "conflict") {
     return false;
   }
 
@@ -204,13 +239,28 @@ const save = async (): Promise<boolean> => {
       emit("saved");
       return true;
     }
-    await parse(
+
+    const payload = JSON.parse(body) as {
+      title: string;
+      scene: ExcalidrawInitialDataState;
+    };
+
+    const updated = await parse<CloudProjectAccess>(
       await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify({
+          ...payload,
+          expectedUpdatedAt: project.updatedAt || null,
+        }),
       }),
     );
+
+    activeProject = {
+      ...project,
+      title: updated.title,
+      updatedAt: updated.updatedAt,
+    };
     lastSavedPayload = body;
     lastSavedFingerprint = fingerprint(snapshot);
     emit("saved");
@@ -218,11 +268,16 @@ const save = async (): Promise<boolean> => {
   } catch (error) {
     pending = pending || snapshot;
     console.error(error);
-    emit("error");
+    emit(
+      error instanceof CloudProjectRequestError && error.status === 409
+        ? "conflict"
+        : "error",
+    );
     return false;
   } finally {
     saving = false;
-    if (pending && status !== "error") {
+
+    if (pending && status !== "error" && status !== "conflict") {
       if (fingerprint(pending) === lastSavedFingerprint) {
         pending = null;
         emit("saved");
@@ -239,15 +294,17 @@ export const updateCloudProjectDraft = (snapshot: Snapshot) => {
   if (!getActiveCloudProject()) {
     return;
   }
+
   if (fingerprint(snapshot) === lastSavedFingerprint) {
     pending = null;
-    if (!saving) {
+    if (!saving && status !== "conflict") {
       emit("saved");
     }
     return;
   }
+
   pending = snapshot;
-  if (!saving) {
+  if (!saving && status !== "conflict") {
     emit("dirty");
   }
 };
@@ -255,6 +312,10 @@ export const updateCloudProjectDraft = (snapshot: Snapshot) => {
 export const saveCloudProjectNow = async () => {
   while (saving) {
     await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  if (status === "conflict") {
+    return false;
   }
   if (pending) {
     return save();
@@ -278,9 +339,13 @@ export const renameCloudProject = async (
     await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        expectedUpdatedAt: project.updatedAt || null,
+      }),
     }),
   );
+
   if (activeProject?.id === updated.id) {
     activeProject = updated;
   }
@@ -297,6 +362,7 @@ export const renameCloudProject = async (
       files: previous.scene?.files,
     });
   }
+
   return updated;
 };
 
@@ -304,12 +370,14 @@ export const openCloudProject = async (project: CloudProjectAccess) => {
   while (saving) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+
   if (
     pending &&
     !window.confirm("Discard unsaved changes and open another project?")
   ) {
     return false;
   }
+
   pending = null;
   emit("idle");
   history.pushState(
