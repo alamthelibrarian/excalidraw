@@ -54,6 +54,7 @@ import {
 
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type { RestoredDataState } from "@excalidraw/excalidraw/data/restore";
+import type { ImportedDataState } from "@excalidraw/excalidraw/data/types";
 import type {
   FileId,
   NonDeletedExcalidrawElement,
