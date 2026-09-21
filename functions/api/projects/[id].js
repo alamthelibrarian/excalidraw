@@ -24,15 +24,27 @@ const find = async (db, id, userId) => {
 };
 
 const assertExpectedVersion = (expectedUpdatedAt, project) => {
-  if (
-    expectedUpdatedAt &&
-    expectedUpdatedAt !== project.updated_at
-  ) {
+  if (!expectedUpdatedAt) {
+    throw new ResponseError(
+      428,
+      "Reload this project before saving so its latest version can be verified.",
+    );
+  }
+
+  if (expectedUpdatedAt !== project.updated_at) {
     throw new ResponseError(
       409,
       "This project changed on another device. Reopen the latest version or save your current canvas as a new project.",
     );
   }
+};
+
+const nextUpdatedAt = (previous) => {
+  const previousTime = Date.parse(previous);
+  const nextTime = Number.isFinite(previousTime)
+    ? Math.max(Date.now(), previousTime + 1)
+    : Date.now();
+  return new Date(nextTime).toISOString();
 };
 
 const assertUpdated = (result) => {
@@ -76,8 +88,8 @@ export const onRequestPut = async ({ request, env, params }) => {
 
     assertExpectedVersion(expectedUpdatedAt, current);
 
-    const compareUpdatedAt = expectedUpdatedAt || current.updated_at;
-    const now = new Date().toISOString();
+    const compareUpdatedAt = expectedUpdatedAt;
+    const now = nextUpdatedAt(current.updated_at);
     const result = await db
       .prepare(
         "UPDATE projects SET title=?,scene_data=?,updated_at=? WHERE id=? AND user_id=? AND updated_at=?",
@@ -122,8 +134,8 @@ export const onRequestPatch = async ({ request, env, params }) => {
         : String(body.expectedUpdatedAt).trim();
     assertExpectedVersion(expectedUpdatedAt, current);
 
-    const compareUpdatedAt = expectedUpdatedAt || current.updated_at;
-    const now = new Date().toISOString();
+    const compareUpdatedAt = expectedUpdatedAt;
+    const now = nextUpdatedAt(current.updated_at);
     const result = await db
       .prepare(
         "UPDATE projects SET title=?,updated_at=? WHERE id=? AND user_id=? AND updated_at=?",
