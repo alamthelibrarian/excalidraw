@@ -57,6 +57,10 @@ If the production database already has a manually-created `share_links`
 table, migration 0002 is a no-op because it uses `CREATE TABLE IF NOT EXISTS`;
 migration 0003 then adds the lifecycle columns.
 
+Deployment is safe before migration 0003 is applied: the share API detects the
+older schema and continues creating/opening ordinary encrypted snapshots. The
+expiry/revoke buttons stay disabled until the lifecycle columns are available.
+
 ## Project save behavior
 
 Projects are limited to roughly 1.8 MB of serialized scene data. Manual saves
