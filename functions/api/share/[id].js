@@ -8,10 +8,14 @@ import {
   ResponseError,
 } from "../projects/_shared.js";
 
-const getOwnedShare = async (db, id, userId) => {
+import { hasShareLifecycleColumns } from "./_shared.js";
+
+const getOwnedShare = async (db, id, userId, hasLifecycle) => {
   const share = await db
     .prepare(
-      "SELECT id,created_at,expires_at,revoked_at FROM share_links WHERE id=? AND user_id=?",
+      hasLifecycle
+        ? "SELECT id,created_at,expires_at,revoked_at FROM share_links WHERE id=? AND user_id=?"
+        : "SELECT id,created_at FROM share_links WHERE id=? AND user_id=?",
     )
     .bind(id, userId)
     .first();
@@ -22,11 +26,24 @@ const getOwnedShare = async (db, id, userId) => {
   return share;
 };
 
+const requireLifecycle = (hasLifecycle) => {
+  if (!hasLifecycle) {
+    throw new ResponseError(
+      503,
+      "Share expiration and revocation require migration 0003_share_link_lifecycle.sql.",
+    );
+  }
+};
+
 export const onRequestGet = async ({ env, params }) => {
   try {
-    const row = await requireDatabase(env)
+    const db = requireDatabase(env);
+    const hasLifecycle = await hasShareLifecycleColumns(db);
+    const row = await db
       .prepare(
-        "SELECT payload,expires_at,revoked_at FROM share_links WHERE id=?",
+        hasLifecycle
+          ? "SELECT payload,expires_at,revoked_at FROM share_links WHERE id=?"
+          : "SELECT payload FROM share_links WHERE id=?",
       )
       .bind(String(params.id))
       .first();
@@ -35,11 +52,16 @@ export const onRequestGet = async ({ env, params }) => {
       throw new ResponseError(404, "Shared drawing not found.");
     }
 
-    const now = Date.now();
-    const expired =
-      row.expires_at && new Date(row.expires_at).getTime() <= now;
-    if (row.revoked_at || expired) {
-      throw new ResponseError(410, "This shared drawing is no longer available.");
+    if (hasLifecycle) {
+      const now = Date.now();
+      const expired =
+        row.expires_at && new Date(row.expires_at).getTime() <= now;
+      if (row.revoked_at || expired) {
+        throw new ResponseError(
+          410,
+          "This shared drawing is no longer available.",
+        );
+      }
     }
 
     const payload =
@@ -73,8 +95,11 @@ export const onRequestPatch = async ({ request, env, params }) => {
     requireSameOrigin(request);
     const user = await getSession(request, env);
     const db = requireDatabase(env);
+    const hasLifecycle = await hasShareLifecycleColumns(db);
+    requireLifecycle(hasLifecycle);
+
     const id = String(params.id);
-    await getOwnedShare(db, id, user.sub);
+    await getOwnedShare(db, id, user.sub, hasLifecycle);
 
     const body = await readJson(request);
     if (
@@ -87,7 +112,6 @@ export const onRequestPatch = async ({ request, env, params }) => {
     }
 
     let expiresAt = null;
-
     if (body.expiresAt != null) {
       const date = new Date(String(body.expiresAt));
       if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
@@ -117,8 +141,11 @@ export const onRequestDelete = async ({ request, env, params }) => {
     requireSameOrigin(request);
     const user = await getSession(request, env);
     const db = requireDatabase(env);
+    const hasLifecycle = await hasShareLifecycleColumns(db);
+    requireLifecycle(hasLifecycle);
+
     const id = String(params.id);
-    await getOwnedShare(db, id, user.sub);
+    await getOwnedShare(db, id, user.sub, hasLifecycle);
 
     const revokedAt = new Date().toISOString();
     await db
