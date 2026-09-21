@@ -77,6 +77,15 @@ export const onRequestPatch = async ({ request, env, params }) => {
     await getOwnedShare(db, id, user.sub);
 
     const body = await readJson(request);
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      !Object.prototype.hasOwnProperty.call(body, "expiresAt")
+    ) {
+      throw new ResponseError(400, "expiresAt is required.");
+    }
+
     let expiresAt = null;
 
     if (body.expiresAt != null) {
