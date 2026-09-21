@@ -77,8 +77,8 @@ const parse = async <T>(response: Response): Promise<T> => {
   return data as T;
 };
 
-const scene = (snapshot: Snapshot) =>
-  JSON.parse(
+const scene = (snapshot: Snapshot) => {
+  const serialized = JSON.parse(
     serializeAsJSON(
       snapshot.elements,
       snapshot.appState,
@@ -86,6 +86,17 @@ const scene = (snapshot: Snapshot) =>
       "local",
     ),
   ) as ExcalidrawInitialDataState;
+
+  return {
+    ...serialized,
+    appState: {
+      ...serialized.appState,
+      scrollX: snapshot.appState.scrollX,
+      scrollY: snapshot.appState.scrollY,
+      zoom: snapshot.appState.zoom,
+    },
+  };
+};
 
 const serializeSnapshot = (snapshot: Snapshot) =>
   JSON.stringify({ title: snapshot.title, scene: scene(snapshot) });
@@ -128,6 +139,9 @@ const fingerprint = ({
       currentAppState.gridModeEnabled,
       currentAppState.viewBackgroundColor,
       currentAppState.lockedMultiSelections,
+      currentAppState.scrollX,
+      currentAppState.scrollY,
+      currentAppState.zoom?.value,
     ],
     Object.values(currentFiles)
       .filter((file) => referencedFileIds.has(file.id))
