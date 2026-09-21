@@ -9,6 +9,7 @@ export type ManagedShareLink = {
   createdAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
+  lifecycleAvailable: boolean;
 };
 
 const parse = async <T>(response: Response): Promise<T> => {
