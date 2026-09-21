@@ -133,12 +133,17 @@ import { AppSidebar } from "./components/AppSidebar";
 import { CloudProjectsDialog } from "./components/CloudProjectsDialog";
 import {
   getActiveCloudProject,
+  getCloudSaveStatus,
   hasUnsavedCloudChanges,
   loadActiveCloudProject,
   saveCloudProjectNow,
   subscribeToCloudSaveStatus,
   updateCloudProjectDraft,
 } from "./data/cloudProjects";
+import {
+  SHARE_LINK_HASH,
+  isReadonlyShareHash,
+} from "./data/shareLinks";
 
 import type { CloudProjectSaveStatus } from "./data/cloudProjects";
 
@@ -182,8 +187,7 @@ window.addEventListener(
 
 let isSelfEmbedding = false;
 
-const SHARE_LINK_HASH = /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/;
-const isReadonlyShareLink = SHARE_LINK_HASH.test(window.location.hash);
+const isReadonlyShareLink = isReadonlyShareHash(window.location.hash);
 
 if (window.self !== window.top) {
   try {
@@ -728,7 +732,7 @@ const ExcalidrawWrapper = () => {
 
     // this check is redundant, but since this is a hot path, it's best
     // not to evaludate the nested expression every time
-    if (!LocalData.isSavePaused()) {
+    if (!isReadonlyShareLink && !LocalData.isSavePaused()) {
       LocalData.save(elements, appState, files, () => {
         if (excalidrawAPI) {
           let didChange = false;
@@ -758,15 +762,17 @@ const ExcalidrawWrapper = () => {
       });
     }
 
-    updateCloudProjectDraft({
-      elements,
-      appState,
-      files,
-      title:
-        getActiveCloudProject()?.title ||
-        excalidrawAPI?.getName() ||
-        "Untitled project",
-    });
+    if (!isReadonlyShareLink) {
+      updateCloudProjectDraft({
+        elements,
+        appState,
+        files,
+        title:
+          getActiveCloudProject()?.title ||
+          excalidrawAPI?.getName() ||
+          "Untitled project",
+      });
+    }
 
     // Render the debug scene if the debug canvas is available
     if (debugCanvasRef.current && excalidrawAPI) {
@@ -956,6 +962,14 @@ const ExcalidrawWrapper = () => {
                   className="cloud-projects-trigger"
                   disabled={cloudSaveStatus === "saving"}
                   onClick={() => {
+                    if (cloudSaveStatus === "conflict") {
+                      setIsCloudProjectsOpen(true);
+                      excalidrawAPI?.setToast({
+                        message:
+                          "This project changed on another device. Save this canvas as a new project or reopen the latest version.",
+                      });
+                      return;
+                    }
                     if (document.activeElement instanceof HTMLElement) {
                       document.activeElement.blur();
                     }
@@ -974,9 +988,12 @@ const ExcalidrawWrapper = () => {
                           "Untitled project",
                       });
                       const saved = await saveCloudProjectNow();
+                      const latestStatus = getCloudSaveStatus();
                       excalidrawAPI.setToast({
                         message: saved
                           ? "Project saved."
+                          : latestStatus === "conflict"
+                          ? "This project changed on another device. Save this canvas as a new project or reopen the latest version."
                           : "The project could not be saved.",
                       });
                     });
@@ -987,6 +1004,8 @@ const ExcalidrawWrapper = () => {
                     ? "Saving…"
                     : cloudSaveStatus === "saved"
                     ? "Saved ✓"
+                    : cloudSaveStatus === "conflict"
+                    ? "Conflict — Projects"
                     : cloudSaveStatus === "error"
                     ? "Retry save"
                     : "Save changes"}
@@ -1036,6 +1055,7 @@ const ExcalidrawWrapper = () => {
           onCollabDialogOpen={onCollabDialogOpen}
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
+          isReadonly={isReadonlyShareLink}
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
           onCloudProjectsOpen={() => setIsCloudProjectsOpen(true)}
@@ -1103,6 +1123,7 @@ const ExcalidrawWrapper = () => {
             {
               label: t("labels.liveCollaboration"),
               category: DEFAULT_CATEGORIES.app,
+              predicate: () => !isReadonlyShareLink,
               keywords: [
                 "team",
                 "multiplayer",
@@ -1144,7 +1165,7 @@ const ExcalidrawWrapper = () => {
             {
               label: t("labels.share"),
               category: DEFAULT_CATEGORIES.app,
-              predicate: true,
+              predicate: () => !isReadonlyShareLink,
               icon: share,
               keywords: [
                 "link",

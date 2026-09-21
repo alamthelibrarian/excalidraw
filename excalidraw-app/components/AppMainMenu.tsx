@@ -14,30 +14,38 @@ export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
   isCollaborating: boolean;
   isCollabEnabled: boolean;
+  isReadonly: boolean;
   theme: Theme | "system";
   refresh: () => void;
   onCloudProjectsOpen: () => void;
 }> = React.memo((props) => {
   return (
     <MainMenu>
-      <MainMenu.DefaultItems.LoadScene />
-      <MainMenu.DefaultItems.SaveToActiveFile />
+      {!props.isReadonly && <MainMenu.DefaultItems.LoadScene />}
+      {!props.isReadonly && <MainMenu.DefaultItems.SaveToActiveFile />}
       <MainMenu.DefaultItems.Export />
       <MainMenu.DefaultItems.SaveAsImage />
-      <MainMenu.Item icon={save} onSelect={props.onCloudProjectsOpen}>
-        My Projects
-      </MainMenu.Item>
-      {props.isCollabEnabled && (
+
+      {!props.isReadonly && (
+        <MainMenu.Item icon={save} onSelect={props.onCloudProjectsOpen}>
+          My Projects
+        </MainMenu.Item>
+      )}
+
+      {!props.isReadonly && props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
           isCollaborating={props.isCollaborating}
           onSelect={() => props.onCollabDialogOpen()}
         />
       )}
+
       <MainMenu.DefaultItems.CommandPalette className="highlighted" />
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
-      <MainMenu.DefaultItems.ClearCanvas />
-      {isDevEnv() && (
+
+      {!props.isReadonly && <MainMenu.DefaultItems.ClearCanvas />}
+
+      {isDevEnv() && !props.isReadonly && (
         <MainMenu.Item
           icon={eyeIcon}
           onSelect={() => {
@@ -48,19 +56,25 @@ export const AppMainMenu: React.FC<{
               window.visualDebug = { data: [] };
               saveDebugState({ enabled: true });
             }
-            props?.refresh();
+            props.refresh();
           }}
         >
           Visual Debug
         </MainMenu.Item>
       )}
+
       <MainMenu.Separator />
-      <MainMenu.DefaultItems.Preferences />
-      <MainMenu.DefaultItems.ToggleTheme allowSystemTheme theme={props.theme} />
+      {!props.isReadonly && <MainMenu.DefaultItems.Preferences />}
+      <MainMenu.DefaultItems.ToggleTheme
+        allowSystemTheme
+        theme={props.theme}
+      />
       <MainMenu.ItemCustom>
         <LanguageList style={{ width: "100%" }} />
       </MainMenu.ItemCustom>
-      <MainMenu.DefaultItems.ChangeCanvasBackground />
+      {!props.isReadonly && (
+        <MainMenu.DefaultItems.ChangeCanvasBackground />
+      )}
     </MainMenu>
   );
 });

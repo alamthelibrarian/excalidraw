@@ -287,6 +287,30 @@
   margin-top: 1rem !important;
 }
 
+.cloud-projects-section {
+  margin: 1.25rem 0;
+}
+
+.cloud-projects-section + .cloud-projects-section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+}
+
+.cloud-projects-section-heading {
+  margin-bottom: 0.75rem;
+}
+
+.cloud-projects-section-heading h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.2rem;
+}
+
+.cloud-projects-section-heading p {
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 @media (max-width: 640px) {
   .cloud-projects-create > div,
   .cloud-projects-list article,

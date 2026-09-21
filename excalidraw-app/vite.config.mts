@@ -21,6 +21,14 @@ export default defineConfig(({ mode }) => {
     // We need to specify the envDir since now there are no
     //more located in parallel with the vite.config.ts file but in parent dir
     envDir: "../",
+    define: {
+      "import.meta.env.VITE_APP_GIT_SHA": JSON.stringify(
+        process.env.CF_PAGES_COMMIT_SHA ||
+          process.env.VERCEL_GIT_COMMIT_SHA ||
+          envVars.VITE_APP_GIT_SHA ||
+          "",
+      ),
+    },
     resolve: {
       alias: [
         {
