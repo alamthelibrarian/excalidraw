@@ -197,7 +197,10 @@ export const importFromBackend = async (
   decryptionKey: string,
 ): Promise<ImportedDataState> => {
   try {
-    const response = await fetch(`${BACKEND_V2_GET}${id}`);
+    const response = await fetch(
+      `${BACKEND_V2_GET}${id}?v=2`,
+      { cache: "no-store" },
+    );
 
     if (!response.ok) {
       window.alert(t("alerts.importBackendFailed"));
