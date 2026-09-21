@@ -19,20 +19,35 @@ export const AppMainMenu: React.FC<{
   refresh: () => void;
   onCloudProjectsOpen: () => void;
 }> = React.memo((props) => {
+  if (props.isReadonly) {
+    return (
+      <MainMenu>
+        <MainMenu.DefaultItems.SearchMenu />
+        <MainMenu.DefaultItems.Help />
+        <MainMenu.Separator />
+        <MainMenu.DefaultItems.ToggleTheme
+          allowSystemTheme
+          theme={props.theme}
+        />
+        <MainMenu.ItemCustom>
+          <LanguageList style={{ width: "100%" }} />
+        </MainMenu.ItemCustom>
+      </MainMenu>
+    );
+  }
+
   return (
     <MainMenu>
-      {!props.isReadonly && <MainMenu.DefaultItems.LoadScene />}
-      {!props.isReadonly && <MainMenu.DefaultItems.SaveToActiveFile />}
+      <MainMenu.DefaultItems.LoadScene />
+      <MainMenu.DefaultItems.SaveToActiveFile />
       <MainMenu.DefaultItems.Export />
       <MainMenu.DefaultItems.SaveAsImage />
 
-      {!props.isReadonly && (
-        <MainMenu.Item icon={save} onSelect={props.onCloudProjectsOpen}>
-          My Projects
-        </MainMenu.Item>
-      )}
+      <MainMenu.Item icon={save} onSelect={props.onCloudProjectsOpen}>
+        My Projects
+      </MainMenu.Item>
 
-      {!props.isReadonly && props.isCollabEnabled && (
+      {props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
           isCollaborating={props.isCollaborating}
           onSelect={() => props.onCollabDialogOpen()}
@@ -42,10 +57,9 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.CommandPalette className="highlighted" />
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
+      <MainMenu.DefaultItems.ClearCanvas />
 
-      {!props.isReadonly && <MainMenu.DefaultItems.ClearCanvas />}
-
-      {isDevEnv() && !props.isReadonly && (
+      {isDevEnv() && (
         <MainMenu.Item
           icon={eyeIcon}
           onSelect={() => {
@@ -64,7 +78,7 @@ export const AppMainMenu: React.FC<{
       )}
 
       <MainMenu.Separator />
-      {!props.isReadonly && <MainMenu.DefaultItems.Preferences />}
+      <MainMenu.DefaultItems.Preferences />
       <MainMenu.DefaultItems.ToggleTheme
         allowSystemTheme
         theme={props.theme}
@@ -72,9 +86,7 @@ export const AppMainMenu: React.FC<{
       <MainMenu.ItemCustom>
         <LanguageList style={{ width: "100%" }} />
       </MainMenu.ItemCustom>
-      {!props.isReadonly && (
-        <MainMenu.DefaultItems.ChangeCanvasBackground />
-      )}
+      <MainMenu.DefaultItems.ChangeCanvasBackground />
     </MainMenu>
   );
 });
