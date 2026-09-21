@@ -154,8 +154,11 @@ export const requireDatabase = (env) => {
   return env.DB;
 };
 
-export const handleError = (error) =>
-  error instanceof ResponseError
-    ? json({ error: error.message }, error.status)
-    : (console.error(error),
-      json({ error: "An unexpected server error occurred." }, 500));
+export const handleError = (error) => {
+  if (error instanceof ResponseError) {
+    return json({ error: error.message }, error.status);
+  }
+
+  console.error(error);
+  return json({ error: "An unexpected server error occurred." }, 500);
+};
