@@ -30,6 +30,9 @@ const getShareStatus = (share: ManagedShareLink) => {
   if (share.revokedAt) {
     return `Revoked ${formatDate(share.revokedAt)}`;
   }
+  if (!share.lifecycleAvailable) {
+    return "Apply D1 migration 0003 to enable expiry and revoke";
+  }
   if (share.expiresAt) {
     return `Expires ${formatDate(share.expiresAt)}`;
   }
@@ -381,7 +384,11 @@ export const CloudProjectsDialog = ({
                       </div>
                       <div className="cloud-projects-actions">
                         <button
-                          disabled={busy || !!share.revokedAt}
+                          disabled={
+                            busy ||
+                            !!share.revokedAt ||
+                            !share.lifecycleAvailable
+                          }
                           onClick={() =>
                             void updateShareExpiry(share, 7)
                           }
@@ -390,7 +397,11 @@ export const CloudProjectsDialog = ({
                           7 days
                         </button>
                         <button
-                          disabled={busy || !!share.revokedAt}
+                          disabled={
+                            busy ||
+                            !!share.revokedAt ||
+                            !share.lifecycleAvailable
+                          }
                           onClick={() =>
                             void updateShareExpiry(share, 30)
                           }
@@ -399,7 +410,11 @@ export const CloudProjectsDialog = ({
                           30 days
                         </button>
                         <button
-                          disabled={busy || !!share.revokedAt}
+                          disabled={
+                            busy ||
+                            !!share.revokedAt ||
+                            !share.lifecycleAvailable
+                          }
                           onClick={() =>
                             void updateShareExpiry(share, null)
                           }
@@ -409,7 +424,11 @@ export const CloudProjectsDialog = ({
                         </button>
                         <button
                           className="danger"
-                          disabled={busy || !!share.revokedAt}
+                          disabled={
+                            busy ||
+                            !!share.revokedAt ||
+                            !share.lifecycleAvailable
+                          }
                           onClick={() => void revokeShare(share)}
                           type="button"
                         >
