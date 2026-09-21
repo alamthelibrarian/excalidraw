@@ -249,10 +249,19 @@ export const exportToBackend = async (
 ): Promise<ExportToBackendResult> => {
   const encryptionKey = await generateEncryptionKey("string");
 
+  const serialized = JSON.parse(
+    serializeAsJSON(elements, appState, files, "local"),
+  ) as ImportedDataState;
+
+  serialized.appState = {
+    ...serialized.appState,
+    scrollX: appState.scrollX,
+    scrollY: appState.scrollY,
+    zoom: appState.zoom,
+  };
+
   const payload = await compressData(
-    new TextEncoder().encode(
-      serializeAsJSON(elements, appState, files, "local"),
-    ),
+    new TextEncoder().encode(JSON.stringify(serialized)),
     { encryptionKey },
   );
 
