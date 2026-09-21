@@ -72,6 +72,16 @@ When a conflict is detected, the UI shows a conflict state. The user can open
 Projects and either save the current canvas as a new project or reopen the
 latest cloud version.
 
+## Opening viewport
+
+New cloud-project saves and new encrypted share snapshots persist the current
+canvas viewport (`scrollX`, `scrollY`, and `zoom`). The viewport visible
+when the user presses **Save** or **Share** becomes the initial viewport the
+next time that project or share link is opened.
+
+Older projects and share links do not contain viewport metadata and continue
+to use Excalidraw's previous auto-fit behavior.
+
 ## Shared snapshots
 
 Share payloads are encrypted client-side and limited to roughly 1.5 MB.
