@@ -75,7 +75,10 @@ export const onRequestGet = async ({ request, env }) => {
       env.SESSION_SECRET,
     );
 
-    const headers = new Headers({ Location: "/" });
+    const headers = new Headers({
+      Location: "/",
+      "Cache-Control": "no-store",
+    });
     headers.append(
       "Set-Cookie",
       `draw_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`,
