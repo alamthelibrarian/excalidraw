@@ -106,6 +106,10 @@ export const onRequestPatch = async ({ request, env, params }) => {
     const id = String(params.id);
     const current = await find(db, id, user.sub);
     const body = await readJson(request);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new ResponseError(400, "Invalid project request body.");
+    }
+
     const title = String(body.title || "").trim().slice(0, 120);
 
     if (!title) {
