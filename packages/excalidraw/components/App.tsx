@@ -13363,6 +13363,14 @@ class App extends React.Component<AppProps, AppState> {
 
     if (type === "canvas") {
       if (this.state.viewModeEnabled) {
+        if (!this.isInteractionEnabled()) {
+          return [
+            actionToggleGridMode,
+            actionToggleZenMode,
+            actionToggleStats,
+          ];
+        }
+
         return [
           ...options,
           actionToggleGridMode,
@@ -13398,7 +13406,7 @@ class App extends React.Component<AppProps, AppState> {
     options.push(copyText);
 
     if (this.state.viewModeEnabled) {
-      return [actionCopy, ...options];
+      return this.isInteractionEnabled() ? [actionCopy, ...options] : [];
     }
 
     const zIndexActions: ContextMenuItems =

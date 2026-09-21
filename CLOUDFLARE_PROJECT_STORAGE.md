@@ -92,9 +92,12 @@ checked by the Pages Function instead of being bypassed by a long-lived cache.
 ## Read-only behavior
 
 A URL matching `#json=<id>,<key>` is treated as a controlled read-only scene.
-The hash is preserved across refreshes, editing/project/collaboration controls
-are hidden, and the shared scene is not persisted into normal local browser
-storage.
+The original share hash is locked for the lifetime of that page and preserved
+across refreshes. A read-only recipient can navigate/zoom and use harmless
+view controls, but cannot load another scene, save to disk, export/copy an
+image, open Projects, create another share, start collaboration, use editing
+tools, or switch out of the controlled read-only state. The shared scene is
+also excluded from normal local browser synchronization/storage.
 
 ## Deployment verification
 

@@ -142,7 +142,7 @@ import {
 } from "./data/cloudProjects";
 import {
   SHARE_LINK_HASH,
-  isReadonlyShareHash,
+  getReadonlyShareHash,
 } from "./data/shareLinks";
 
 import type { CloudProjectSaveStatus } from "./data/cloudProjects";
@@ -187,7 +187,8 @@ window.addEventListener(
 
 let isSelfEmbedding = false;
 
-const isReadonlyShareLink = isReadonlyShareHash(window.location.hash);
+const readonlyShareHash = getReadonlyShareHash(window.location.hash);
+const isReadonlyShareLink = readonlyShareHash !== null;
 
 if (window.self !== window.top) {
   try {
@@ -577,6 +578,20 @@ const ExcalidrawWrapper = () => {
 
     const onHashChange = async (event: HashChangeEvent) => {
       event.preventDefault();
+
+      if (readonlyShareHash && window.location.hash !== readonlyShareHash) {
+        window.history.replaceState(
+          {},
+          APP_NAME,
+          `${window.location.pathname}${window.location.search}${readonlyShareHash}`,
+        );
+        excalidrawAPI.updateScene({
+          appState: { viewModeEnabled: true },
+          captureUpdate: CaptureUpdateAction.NEVER,
+        });
+        return;
+      }
+
       const libraryUrlTokens = parseLibraryTokensFromUrl();
       if (!libraryUrlTokens) {
         if (
@@ -603,7 +618,7 @@ const ExcalidrawWrapper = () => {
     };
 
     const syncData = debounce(() => {
-      if (isTestEnv()) {
+      if (isTestEnv() || isReadonlyShareLink) {
         return;
       }
       if (
@@ -794,6 +809,9 @@ const ExcalidrawWrapper = () => {
     appState: Partial<AppState>,
     files: BinaryFiles,
   ) => {
+    if (isReadonlyShareLink) {
+      throw new Error("Sharing is disabled for read-only drawings.");
+    }
     if (exportedElements.length === 0) {
       throw new Error(t("alerts.cannotExportEmptyCanvas"));
     }
@@ -846,10 +864,12 @@ const ExcalidrawWrapper = () => {
 
   const localStorageQuotaExceeded = useAtomValue(localStorageQuotaExceededAtom);
 
-  const onCollabDialogOpen = useCallback(
-    () => setShareDialogState({ isOpen: true, type: "collaborationOnly" }),
-    [setShareDialogState],
-  );
+  const onCollabDialogOpen = useCallback(() => {
+    if (isReadonlyShareLink) {
+      return;
+    }
+    setShareDialogState({ isOpen: true, type: "collaborationOnly" });
+  }, [setShareDialogState]);
 
   // ---------------------------------------------------------------------------
   // onExport — intercepts file save to wait for pending image loads
@@ -929,26 +949,36 @@ const ExcalidrawWrapper = () => {
     >
       <Excalidraw
         onChange={onChange}
-        onExport={onExport}
+        onExport={isReadonlyShareLink ? undefined : onExport}
         initialData={initialStatePromiseRef.current.promise}
         viewModeEnabled={isReadonlyShareLink}
         interaction={
-          isReadonlyShareLink
-            ? { enabled: { navigation: true, interactiveContent: true } }
-            : true
+          isReadonlyShareLink ? { enabled: { navigation: true } } : true
         }
-        isCollaborating={isCollaborating}
-        onPointerUpdate={collabAPI?.onPointerUpdate}
+        isCollaborating={isReadonlyShareLink ? false : isCollaborating}
+        onPointerUpdate={
+          isReadonlyShareLink ? undefined : collabAPI?.onPointerUpdate
+        }
         UIOptions={{
-          canvasActions: {
-            toggleTheme: true,
-            export: { onExportToBackend },
-          },
+          canvasActions: isReadonlyShareLink
+            ? {
+                toggleTheme: true,
+                export: false,
+                loadScene: false,
+                saveToActiveFile: false,
+                saveAsImage: false,
+                clearCanvas: false,
+                changeViewBackgroundColor: false,
+              }
+            : {
+                toggleTheme: true,
+                export: { onExportToBackend },
+              },
         }}
         langCode={langCode}
         renderCustomStats={renderCustomStats}
         detectScroll={false}
-        handleKeyboardGlobally={true}
+        handleKeyboardGlobally={!isReadonlyShareLink}
         autoFocus={true}
         theme={editorTheme}
         onThemeChange={setAppTheme}
@@ -1060,18 +1090,26 @@ const ExcalidrawWrapper = () => {
           refresh={() => forceRefresh((prev) => !prev)}
           onCloudProjectsOpen={() => setIsCloudProjectsOpen(true)}
         />
-        <AppWelcomeScreen
-          onCollabDialogOpen={onCollabDialogOpen}
-          isCollabEnabled={!isCollabDisabled}
-        />
+        {!isReadonlyShareLink && (
+          <AppWelcomeScreen
+            onCollabDialogOpen={onCollabDialogOpen}
+            isCollabEnabled={!isCollabDisabled}
+          />
+        )}
         <OverwriteConfirmDialog>
-          <OverwriteConfirmDialog.Actions.ExportToImage />
-          <OverwriteConfirmDialog.Actions.SaveToDisk />
+          {!isReadonlyShareLink && (
+            <>
+              <OverwriteConfirmDialog.Actions.ExportToImage />
+              <OverwriteConfirmDialog.Actions.SaveToDisk />
+            </>
+          )}
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
-        {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
+        {!isReadonlyShareLink && excalidrawAPI && (
+          <AIComponents excalidrawAPI={excalidrawAPI} />
+        )}
 
-        <TTDDialogTrigger />
+        {!isReadonlyShareLink && <TTDDialogTrigger />}
         {isCollaborating && isOffline && (
           <div className="alertalert--warning">
             {t("alerts.collabOfflineWarning")}
@@ -1082,18 +1120,19 @@ const ExcalidrawWrapper = () => {
             {t("alerts.localStorageQuotaExceeded")}
           </div>
         )}
-        {latestShareableLink && (
+        {!isReadonlyShareLink && latestShareableLink && (
           <ShareableLinkDialog
             link={latestShareableLink}
             onCloseRequest={() => setLatestShareableLink(null)}
             setErrorMessage={setErrorMessage}
           />
         )}
-        {excalidrawAPI && !isCollabDisabled && (
+        {!isReadonlyShareLink && excalidrawAPI && !isCollabDisabled && (
           <Collab excalidrawAPI={excalidrawAPI} />
         )}
 
-        <ShareDialog
+        {!isReadonlyShareLink && (
+          <ShareDialog
           collabAPI={collabAPI}
           onExportToBackend={async () => {
             if (excalidrawAPI) {
@@ -1108,9 +1147,10 @@ const ExcalidrawWrapper = () => {
               }
             }
           }}
-        />
+          />
+        )}
 
-        <AppSidebar />
+        {!isReadonlyShareLink && <AppSidebar />}
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>
@@ -1118,8 +1158,9 @@ const ExcalidrawWrapper = () => {
           </ErrorDialog>
         )}
 
-        <CommandPalette
-          customCommandPaletteItems={[
+        {!isReadonlyShareLink && (
+          <CommandPalette
+            customCommandPaletteItems={[
             {
               label: t("labels.liveCollaboration"),
               category: DEFAULT_CATEGORIES.app,
@@ -1197,9 +1238,10 @@ const ExcalidrawWrapper = () => {
                 }
               },
             },
-          ]}
-        />
-        {isVisualDebuggerEnabled() && excalidrawAPI && (
+            ]}
+          />
+        )}
+        {!isReadonlyShareLink && isVisualDebuggerEnabled() && excalidrawAPI && (
           <DebugCanvas
             appState={excalidrawAPI.getAppState()}
             scale={window.devicePixelRatio}
@@ -1207,7 +1249,7 @@ const ExcalidrawWrapper = () => {
           />
         )}
       </Excalidraw>
-      {isCloudProjectsOpen && excalidrawAPI && (
+      {!isReadonlyShareLink && isCloudProjectsOpen && excalidrawAPI && (
         <CloudProjectsDialog
           excalidrawAPI={excalidrawAPI}
           onClose={() => setIsCloudProjectsOpen(false)}
