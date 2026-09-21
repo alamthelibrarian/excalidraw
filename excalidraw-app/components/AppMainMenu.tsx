@@ -1,4 +1,8 @@
-import { eyeIcon, save } from "@excalidraw/excalidraw/components/icons";
+import {
+  eyeIcon,
+  save,
+  TrashIcon,
+} from "@excalidraw/excalidraw/components/icons";
 import { MainMenu } from "@excalidraw/excalidraw/index";
 import React from "react";
 
@@ -18,10 +22,14 @@ export const AppMainMenu: React.FC<{
   theme: Theme | "system";
   refresh: () => void;
   onCloudProjectsOpen: () => void;
+  onResetCanvas: () => void;
 }> = React.memo((props) => {
   if (props.isReadonly) {
     return (
       <MainMenu>
+        <MainMenu.Item icon={TrashIcon} onSelect={props.onResetCanvas}>
+          Reset canvas
+        </MainMenu.Item>
         <MainMenu.DefaultItems.SearchMenu />
         <MainMenu.DefaultItems.Help />
         <MainMenu.Separator />
