@@ -225,6 +225,25 @@ const initializeScene = async (opts: {
   )
 > => {
   const searchParams = new URLSearchParams(window.location.search);
+
+  if (searchParams.get("reset") === "1") {
+    localStorage.removeItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
+    localStorage.removeItem(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE);
+    localStorage.removeItem(STORAGE_KEYS.VERSION_DATA_STATE);
+    localStorage.removeItem(STORAGE_KEYS.VERSION_FILES);
+
+    window.history.replaceState({}, APP_NAME, window.location.pathname);
+
+    return {
+      scene: {
+        elements: [],
+        appState: getDefaultAppState(),
+        files: {},
+      },
+      isExternalScene: false,
+    };
+  }
+
   const id = searchParams.get("id");
   const jsonBackendMatch = window.location.hash.match(SHARE_LINK_HASH);
   const externalUrlMatch = window.location.hash.match(/^#url=(.*)$/);
@@ -567,11 +586,17 @@ const ExcalidrawWrapper = () => {
   );
 
   useEffect(() => {
-    if (!excalidrawAPI || (!isCollabDisabled && !collabAPI)) {
+    if (
+      !excalidrawAPI ||
+      (!isReadonlyShareLink && !isCollabDisabled && !collabAPI)
+    ) {
       return;
     }
 
-    initializeScene({ collabAPI, excalidrawAPI }).then(async (data) => {
+    initializeScene({
+      collabAPI: isReadonlyShareLink ? null : collabAPI,
+      excalidrawAPI,
+    }).then(async (data) => {
       loadImages(data, /* isInitialLoad */ true);
       initialStatePromiseRef.current.promise.resolve(data.scene);
     });
@@ -1089,6 +1114,11 @@ const ExcalidrawWrapper = () => {
           theme={appTheme}
           refresh={() => forceRefresh((prev) => !prev)}
           onCloudProjectsOpen={() => setIsCloudProjectsOpen(true)}
+          onResetCanvas={() => {
+            window.location.assign(
+              `${window.location.pathname}?reset=1`,
+            );
+          }}
         />
         {!isReadonlyShareLink && (
           <AppWelcomeScreen
