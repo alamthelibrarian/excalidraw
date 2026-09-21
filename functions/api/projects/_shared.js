@@ -125,6 +125,10 @@ export const readBody = async (request) => {
   }
 
   const body = await readJson(request);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ResponseError(400, "Invalid project request body.");
+  }
+
   const sceneData = JSON.stringify(body.scene || {});
   if (new TextEncoder().encode(sceneData).byteLength > MAX_PROJECT_BYTES) {
     throw new ResponseError(413, "Project is too large.");
