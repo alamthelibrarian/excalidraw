@@ -4,6 +4,9 @@ export const SHARE_LINK_HASH =
 export const isReadonlyShareHash = (hash: string) =>
   SHARE_LINK_HASH.test(hash);
 
+export const getReadonlyShareHash = (hash: string) =>
+  isReadonlyShareHash(hash) ? hash : null;
+
 export type ManagedShareLink = {
   id: string;
   createdAt: string;
